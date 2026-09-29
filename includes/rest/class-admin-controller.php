@@ -22,9 +22,11 @@ class Admin_Controller {
 	private Automation_Config $automation_config;
 
 	/**
+	 * Constructor.
+	 *
 	 * @param Audit_Log                   $audit             Audit log used to record changes.
 	 * @param Policy_Version_Manager|null $policy_versions   Policy version store; defaults to a new instance.
-	 * @param Automation_Config|null       $automation_config Automation settings store; defaults to a new instance.
+	 * @param Automation_Config|null      $automation_config Automation settings store; defaults to a new instance.
 	 */
 	public function __construct( Audit_Log $audit, ?Policy_Version_Manager $policy_versions = null, ?Automation_Config $automation_config = null ) {
 		$this->audit             = $audit;
