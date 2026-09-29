@@ -85,6 +85,8 @@ class Config_Portability {
 	private Audit_Log $audit;
 
 	/**
+	 * Constructor.
+	 *
 	 * @param Audit_Log $audit Audit log that records export and import events.
 	 */
 	public function __construct( Audit_Log $audit ) {

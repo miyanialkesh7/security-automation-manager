@@ -48,6 +48,8 @@ class Feature_Gate {
 	private bool $cache_loaded        = false;
 
 	/**
+	 * Constructor.
+	 *
 	 * @param object|null $entitlements Entitlement service, or null when none is installed.
 	 */
 	public function __construct( ?object $entitlements = null ) {
