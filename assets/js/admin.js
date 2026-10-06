@@ -199,16 +199,16 @@
 	function sourceActionsHtml( id, state, lastDecision ) {
 		const buttons = [];
 		if ( state === 'pending' || state === 'denied' ) {
-			buttons.push( '<button type="button" class="button button-small wp-sam-approve-source" data-id="' + id + '">Approve</button>' );
+			buttons.push( '<button type="button" class="button button-small wp-sam-approve-source" data-id="' + id + '">' + wpSamAdmin.i18n.approve + '</button>' );
 		}
 		if ( state === 'pending' || state === 'approved' ) {
-			buttons.push( '<button type="button" class="button button-small wp-sam-deny-source" data-id="' + id + '">Reject</button>' );
+			buttons.push( '<button type="button" class="button button-small wp-sam-deny-source" data-id="' + id + '">' + wpSamAdmin.i18n.reject + '</button>' );
 		}
 		if ( state === 'approved' ) {
-			buttons.push( '<button type="button" class="button button-small wp-sam-revert-source" data-id="' + id + '">Revert</button>' );
+			buttons.push( '<button type="button" class="button button-small wp-sam-revert-source" data-id="' + id + '">' + wpSamAdmin.i18n.revert + '</button>' );
 		}
 		if ( lastDecision === 'approved' || lastDecision === 'rejected' ) {
-			buttons.push( '<button type="button" class="button button-small wp-sam-undo-source-decision" data-id="' + id + '">Undo</button>' );
+			buttons.push( '<button type="button" class="button button-small wp-sam-undo-source-decision" data-id="' + id + '">' + wpSamAdmin.i18n.undo + '</button>' );
 		}
 		return buttons.join( ' ' );
 	}
@@ -252,19 +252,19 @@
 	}
 
 	$( document ).on( 'click', '.wp-sam-approve-source', function () {
-		postSourceDecision( $( this ), 'wp_sam_approve_source', 'Why should this source be approved?', 'approved', 'Approved', 'approved' );
+		postSourceDecision( $( this ), 'wp_sam_approve_source', wpSamAdmin.i18n.approvePrompt, 'approved', wpSamAdmin.i18n.stateApproved, 'approved' );
 	} );
 
 	$( document ).on( 'click', '.wp-sam-deny-source', function () {
-		postSourceDecision( $( this ), 'wp_sam_deny_source', 'Why should this source be rejected and suppressed?', 'denied', 'Denied', 'rejected' );
+		postSourceDecision( $( this ), 'wp_sam_deny_source', wpSamAdmin.i18n.rejectPrompt, 'denied', wpSamAdmin.i18n.stateDenied, 'rejected' );
 	} );
 
 	$( document ).on( 'click', '.wp-sam-revert-source', function () {
-		postSourceDecision( $( this ), 'wp_sam_revert_source', 'Why should this approved source be reverted and suppressed?', 'denied', 'Denied', 'reverted' );
+		postSourceDecision( $( this ), 'wp_sam_revert_source', wpSamAdmin.i18n.revertPrompt, 'denied', wpSamAdmin.i18n.stateDenied, 'reverted' );
 	} );
 
 	$( document ).on( 'click', '.wp-sam-undo-source-decision', function () {
-		postSourceDecision( $( this ), 'wp_sam_undo_source_decision', 'Why should this decision be undone?', 'pending', 'Pending', 'undone' );
+		postSourceDecision( $( this ), 'wp_sam_undo_source_decision', wpSamAdmin.i18n.undoPrompt, 'pending', wpSamAdmin.i18n.statePending, 'undone' );
 	} );
 
 	$( document ).on( 'click', '.wp-sam-use-current-report-endpoint', function () {

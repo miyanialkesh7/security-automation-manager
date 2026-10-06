@@ -828,6 +828,17 @@ class Admin_UI {
 						'patternMatches'         => __( 'Matches.', 'vcns-security-automation-manager' ),
 						'patternNoMatch'         => __( 'Does not match.', 'vcns-security-automation-manager' ),
 						'reasonIsRequired'       => __( 'Reason is required.', 'vcns-security-automation-manager' ),
+						'approve'                => __( 'Approve', 'vcns-security-automation-manager' ),
+						'reject'                 => __( 'Reject', 'vcns-security-automation-manager' ),
+						'revert'                 => __( 'Revert', 'vcns-security-automation-manager' ),
+						'undo'                   => __( 'Undo', 'vcns-security-automation-manager' ),
+						'approvePrompt'          => __( 'Why should this source be approved?', 'vcns-security-automation-manager' ),
+						'rejectPrompt'           => __( 'Why should this source be rejected and suppressed?', 'vcns-security-automation-manager' ),
+						'revertPrompt'           => __( 'Why should this approved source be reverted and suppressed?', 'vcns-security-automation-manager' ),
+						'undoPrompt'             => __( 'Why should this decision be undone?', 'vcns-security-automation-manager' ),
+						'stateApproved'          => __( 'Approved', 'vcns-security-automation-manager' ),
+						'stateDenied'            => __( 'Denied', 'vcns-security-automation-manager' ),
+						'statePending'           => __( 'Pending', 'vcns-security-automation-manager' ),
 					),
 				)
 			);
