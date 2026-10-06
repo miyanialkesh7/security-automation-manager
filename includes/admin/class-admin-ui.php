@@ -1474,7 +1474,7 @@ class Admin_UI {
 		$input = array(
 			'control'                 => sanitize_text_field( wp_unslash( $_POST['control'] ?? '' ) ),
 			'surface'                 => sanitize_text_field( wp_unslash( $_POST['surface'] ?? '' ) ),
-			'weaker_value'            => sanitize_text_field( wp_unslash( $_POST['weaker_value'] ?? '' ) ),
+			'weaker_value'            => sanitize_textarea_field( wp_unslash( $_POST['weaker_value'] ?? '' ) ),
 			'business_justification'  => sanitize_textarea_field( wp_unslash( $_POST['business_justification'] ?? '' ) ),
 			'technical_justification' => sanitize_textarea_field( wp_unslash( $_POST['technical_justification'] ?? '' ) ),
 			'owner'                   => sanitize_text_field( wp_unslash( $_POST['owner'] ?? '' ) ),
@@ -1505,7 +1505,7 @@ class Admin_UI {
 
 		$id              = intval( wp_unslash( $_POST['exception_id'] ?? 0 ) );
 		$new_expiry_date = sanitize_text_field( wp_unslash( $_POST['new_expiry_date'] ?? '' ) );
-		$reason          = sanitize_text_field( wp_unslash( $_POST['reason'] ?? '' ) );
+		$reason          = sanitize_textarea_field( wp_unslash( $_POST['reason'] ?? '' ) );
 
 		$result = ( new Exception_Store() )->extend( $id, $new_expiry_date, $reason );
 
@@ -1523,7 +1523,7 @@ class Admin_UI {
 		}
 
 		$id       = intval( wp_unslash( $_POST['exception_id'] ?? 0 ) );
-		$reason   = sanitize_text_field( wp_unslash( $_POST['reason'] ?? '' ) );
+		$reason   = sanitize_textarea_field( wp_unslash( $_POST['reason'] ?? '' ) );
 		$user     = get_userdata( get_current_user_id() );
 		$username = $user ? $user->user_login : '';
 
@@ -3241,7 +3241,7 @@ class Admin_UI {
 		}
 
 		$id  = intval( wp_unslash( $_POST['id'] ?? 0 ) );
-		$url = trim( esc_url_raw( wp_unslash( $_POST['url'] ?? '' ) ) );
+		$url = esc_url_raw( trim( (string) wp_unslash( $_POST['url'] ?? '' ) ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- cast to string first so an array-shaped url[] cannot raise a TypeError; sanitized by esc_url_raw().
 
 		if ( $id <= 0 || '' === $url ) {
 			wp_send_json_error( array( 'message' => __( 'A URL is required.', 'vcns-security-automation-manager' ) ) );

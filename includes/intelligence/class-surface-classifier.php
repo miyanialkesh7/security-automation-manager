@@ -32,7 +32,7 @@ final class Surface_Classifier {
 	public static function is_conflict_probe_request(): bool {
 		$server_key = 'HTTP_' . strtoupper( str_replace( '-', '_', Request_Surface::CONFLICT_PROBE_HEADER ) );
 
-		return isset( $_SERVER[ $server_key ] ) && '1' === sanitize_text_field( wp_unslash( $_SERVER[ $server_key ] ) );
+		return isset( $_SERVER[ $server_key ] ) && '1' === wp_unslash( $_SERVER[ $server_key ] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- exact-match sentinel; sanitizing would strip percent-encoded bytes so 1%00 would pass as 1.
 	}
 
 	// ── Surface detection ─────────────────────────────────────────────────────
