@@ -532,10 +532,13 @@ class PolicyBuilderTest extends TestCase {
 	public function test_build_applies_approved_style_attr_hash_only_to_itself(): void {
 		// style-src-attr is already scoped to attribute context -- unlike
 		// script-src/style-src, it has no "-elem" counterpart to propagate to.
+		// The bypass flag is on so the hash is live (emitted) at all -- see
+		// the 'unsafe-hashes' gating tests below.
 		$profile = $this->make_profile( [
 			'default-src'     => [ "'none'" ],
 			'style-src-attr'  => [ "'none'" ],
 		] );
+		$profile['bypass_flags'] = wp_json_encode( array( 'style_src_attr_unsafe_hashes' ) );
 
 		$builder = $this->make_db_stub_builder( approved_hashes: [
 			[ 'directive' => 'style-src-attr', 'hash_algo' => 'sha256', 'hash_value' => 'ghi789==' ],
@@ -553,8 +556,8 @@ class PolicyBuilderTest extends TestCase {
 		// 'unsafe-hashes' is no longer added just because a style-src-attr hash
 		// exists -- it's its own BYPASS_CATALOG entry (style_src_attr_unsafe_hashes)
 		// requiring an explicit per-surface opt-in, since it's a keyword security
-		// scanners flag. A captured hash sits inert until the admin also enables
-		// the toggle.
+		// scanners flag. Until the admin also enables the toggle a captured hash
+		// matches nothing (CSP3 §6.1.2), so it isn't emitted either.
 		$profile = $this->make_profile( [
 			'default-src'    => [ "'none'" ],
 			'style-src-attr' => [ "'none'" ],
@@ -569,8 +572,129 @@ class PolicyBuilderTest extends TestCase {
 		$parts          = explode( ';', $policy );
 		$style_src_attr = trim( current( array_filter( $parts, static fn( $p ) => str_starts_with( trim( $p ), 'style-src-attr' ) ) ) );
 
-		$this->assertStringContainsString( "'sha256-ghi789=='", $style_src_attr );
+		$this->assertStringNotContainsString( "'sha256-ghi789=='", $style_src_attr );
 		$this->assertStringNotContainsString( 'unsafe-hashes', $style_src_attr );
+	}
+
+	// ── inert attribute hashes without 'unsafe-hashes' ───────────────────────
+
+	public function test_build_leaves_style_src_attr_exactly_as_without_any_attr_hashes_when_unsafe_hashes_is_off(): void {
+		// Dropping inert hashes must not change the effective policy at all:
+		// the directive is byte-identical to a surface with no captured
+		// attribute hashes -- never empty, never a looser fallback.
+		$profile = $this->make_profile( [
+			'default-src'    => [ "'none'" ],
+			'style-src'      => [ "'self'" ],
+			'style-src-attr' => [ "'none'" ],
+		] );
+
+		$with_hashes = $this->make_db_stub_builder( approved_hashes: [
+			[ 'directive' => 'style-src-attr', 'hash_algo' => 'sha256', 'hash_value' => 'ghi789==' ],
+			[ 'directive' => 'style-src-attr', 'hash_algo' => 'sha256', 'hash_value' => 'jkl012==' ],
+		] )->build_policy_string( $profile, 'frontend' );
+		$without_hashes = $this->make_db_stub_builder()->build_policy_string( $profile, 'frontend' );
+
+		$this->assertSame( $without_hashes, $with_hashes );
+		$this->assertSame(
+			"style-src-attr 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='",
+			$this->extract_directive( $with_hashes, 'style-src-attr' )
+		);
+	}
+
+	public function test_build_keeps_existing_non_hash_style_src_attr_tokens_and_a_hash_source_when_unsafe_hashes_is_off(): void {
+		// Any hash source in a list disables 'unsafe-inline' for it (CSP3),
+		// so dropping the inert inventory hashes must not leave 'unsafe-inline'
+		// standing alone -- the always-present empty-content hash keeps it
+		// neutralised, exactly as before.
+		$profile = $this->make_profile( [
+			'default-src'    => [ "'none'" ],
+			'style-src-attr' => [ "'unsafe-inline'" ],
+		] );
+
+		$builder = $this->make_db_stub_builder( approved_hashes: [
+			[ 'directive' => 'style-src-attr', 'hash_algo' => 'sha256', 'hash_value' => 'ghi789==' ],
+		] );
+
+		$style_src_attr = $this->extract_directive( $builder->build_policy_string( $profile, 'frontend' ), 'style-src-attr' );
+
+		$this->assertSame(
+			"style-src-attr 'unsafe-inline' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='",
+			$style_src_attr
+		);
+	}
+
+	public function test_build_emits_style_src_attr_hashes_when_unsafe_hashes_comes_from_the_profile_itself(): void {
+		// Not only the bypass flag: an admin override (or stored directive)
+		// that already carries 'unsafe-hashes' -- in any keyword case --
+		// makes the hashes live, so they must still be emitted.
+		$profile = $this->make_profile_with_overrides(
+			[ 'default-src' => [ "'none'" ], 'style-src-attr' => [ "'none'" ] ],
+			[ 'style-src-attr' => [ "'Unsafe-Hashes'" ] ]
+		);
+
+		$builder = $this->make_db_stub_builder( approved_hashes: [
+			[ 'directive' => 'style-src-attr', 'hash_algo' => 'sha256', 'hash_value' => 'ghi789==' ],
+		] );
+
+		$style_src_attr = $this->extract_directive( $builder->build_policy_string( $profile, 'frontend' ), 'style-src-attr' );
+
+		$this->assertStringContainsString( "'sha256-ghi789=='", $style_src_attr );
+	}
+
+	public function test_build_applies_the_same_unsafe_hashes_gate_to_script_src_attr_hashes(): void {
+		$profile = $this->make_profile( [ 'default-src' => [ "'none'" ], 'script-src-attr' => [ "'none'" ] ] );
+		$hashes  = [ [ 'directive' => 'script-src-attr', 'hash_algo' => 'sha256', 'hash_value' => 'mno345==' ] ];
+
+		$off = $this->make_db_stub_builder( approved_hashes: $hashes )->build_policy_string( $profile, 'frontend' );
+
+		$profile['bypass_flags'] = wp_json_encode( array( 'script_src_attr_unsafe_hashes' ) );
+		$on                      = $this->make_db_stub_builder( approved_hashes: $hashes )->build_policy_string( $profile, 'frontend' );
+
+		$this->assertStringNotContainsString( "'sha256-mno345=='", $off );
+		$this->assertStringContainsString( "'sha256-mno345=='", $this->extract_directive( $on, 'script-src-attr' ) );
+	}
+
+	public function test_build_does_not_count_inert_style_src_attr_hashes_against_the_budget(): void {
+		// The staging incident shape: hundreds of most-recently-seen
+		// attribute hashes ahead of a real inline-script hash. Inert ones
+		// must not spend the budget and push the script hash out.
+		$audit = $this->createMock( Audit_Log::class );
+		$audit->expects( $this->never() )->method( 'log' );
+
+		$script_hashes   = $this->make_fake_hash_rows( 2, 'script-src' );
+		$approved_hashes = array_merge( $this->make_fake_hash_rows( 100, 'style-src-attr' ), $script_hashes );
+
+		$profile = $this->make_profile( [
+			'default-src'     => [ "'none'" ],
+			'script-src'      => [],
+			'script-src-elem' => [],
+			'style-src-attr'  => [ "'none'" ],
+		] );
+		$builder = $this->make_db_stub_builder( approved_hashes: $approved_hashes, audit: $audit );
+
+		$policy = $builder->build_policy_string( $profile, 'frontend' );
+
+		$this->assertStringContainsString( $script_hashes[1]['hash_value'], $this->extract_directive( $policy, 'script-src-elem' ) );
+	}
+
+	public function test_build_still_counts_live_style_src_attr_hashes_against_the_budget(): void {
+		$audit = $this->createMock( Audit_Log::class );
+		$audit->expects( $this->once() )
+			->method( 'log' )
+			->with( 'policy_builder', 'hash_budget_exceeded', $this->anything(), 'warning' );
+
+		$approved_hashes = array_merge( $this->make_fake_hash_rows( 100, 'style-src-attr' ), $this->make_fake_hash_rows( 2, 'script-src' ) );
+
+		$profile = $this->make_profile( [
+			'default-src'     => [ "'none'" ],
+			'script-src'      => [],
+			'script-src-elem' => [],
+			'style-src-attr'  => [ "'none'" ],
+		] );
+		$profile['bypass_flags'] = wp_json_encode( array( 'style_src_attr_unsafe_hashes' ) );
+		$builder                 = $this->make_db_stub_builder( approved_hashes: $approved_hashes, audit: $audit );
+
+		$builder->build_policy_string( $profile, 'frontend' );
 	}
 
 	public function test_build_adds_unsafe_hashes_when_bypass_flag_enabled(): void {

@@ -17,7 +17,8 @@
  *     BYPASS_CATALOG entry, since it's a scanner-flaggable keyword an admin
  *     must explicitly opt into per surface, same as any other entry -- CSP3
  *     §6.1.2 requires it before any approved hash takes effect in an
- *     attribute context.
+ *     attribute context, so until it's present those hashes are left out
+ *     of the header (and its byte budget) altogether.
  *   - Approved hosts from csp_source_inventory appended per directive.
  *   - report-uri appended automatically for direct browser reporting.
  *   - Reporting API headers and the report-to directive are optional because direct
@@ -237,7 +238,9 @@ class Policy_Builder extends Header_Builder {
 	 * hashes appended to the header. script-src/style-src hashes count
 	 * twice (once for the base directive, once for its -elem counterpart
 	 * -- see the hash-append loop in build_policy_string()); style-src-attr
-	 * hashes count once. Exists purely as a safety net against unbounded
+	 * hashes count once, and only on a surface whose style-src-attr carries
+	 * 'unsafe-hashes' -- otherwise they're inert and never emitted at all.
+	 * Exists purely as a safety net against unbounded
 	 * csp_hash_inventory growth: a runaway hash-learning bug (an inline
 	 * script whose content varies every request, never matching
 	 * Hash_Manager's exact-content dedup) can otherwise grow the emitted
@@ -412,10 +415,21 @@ class Policy_Builder extends Header_Builder {
 		//
 		// Directives already scoped to attribute context (style-src-attr) apply
 		// only to themselves -- there is no "style-src-attr-elem" counterpart.
-		// Note: a hash recorded under style-src-attr has no effect unless the
-		// admin has also enabled the style_src_attr_unsafe_hashes bypass entry
-		// below (CSP3 §6.1.2) -- captured hashes sit inert until then, same as
-		// they did before any hash-capture support existed.
+		// Note: a hash recorded under style-src-attr has no effect unless that
+		// directive also carries 'unsafe-hashes' (CSP3 §6.1.2) -- in practice
+		// the admin enabling the style_src_attr_unsafe_hashes bypass entry
+		// below, or an override. Until then such a token matches nothing, so
+		// it's left out of the header entirely rather than spending the byte
+		// budget that element hashes (a real inline <script>) need. The
+		// inventory row itself is untouched and is emitted again as soon as
+		// the surface opts in. Leaving it out never loosens the policy: an
+		// attribute directive still always carries EMPTY_CONTENT_HASH_TOKEN
+		// (below), so it never ends up empty, and any 'unsafe-inline' on it
+		// stays neutralised by that hash source exactly as before.
+		$enabled_bypass_flags = json_decode( (string) ( $profile['bypass_flags'] ?? '' ), true );
+		$enabled_bypass_flags = is_array( $enabled_bypass_flags ) ? $enabled_bypass_flags : array();
+		$attr_hashes_apply    = array();
+
 		$hashes            = $this->load_approved_hashes( $surface );
 		$hash_budget_bytes = (int) apply_filters( 'wp_sam_max_hash_token_budget_bytes', self::MAX_HASH_TOKEN_BUDGET_BYTES, $surface );
 		$hash_bytes_used   = 0;
@@ -424,9 +438,17 @@ class Policy_Builder extends Header_Builder {
 		foreach ( $hashes as $hash ) {
 			$hash_token = "'{$hash['hash_algo']}-{$hash['hash_value']}'";
 			$base_dir   = $hash['directive'];
-			$targets    = str_ends_with( $base_dir, '-attr' )
+			$is_attr    = str_ends_with( $base_dir, '-attr' );
+			$targets    = $is_attr
 				? array( $base_dir )
 				: array( $base_dir, $base_dir . '-elem' );
+
+			if ( $is_attr ) {
+				$attr_hashes_apply[ $base_dir ] ??= $this->directive_will_have_unsafe_hashes( $directives, $base_dir, $enabled_bypass_flags );
+				if ( ! $attr_hashes_apply[ $base_dir ] ) {
+					continue;
+				}
+			}
 
 			// Worst-case byte cost of admitting this hash: the token is
 			// appended once per target directive (twice for script-src/
@@ -527,8 +549,7 @@ class Policy_Builder extends Header_Builder {
 		// BYPASS_CATALOG's docblock: entries span low through high risk,
 		// but every one is individually reasoned about and requires this
 		// explicit per-surface opt-in -- nothing here is ever automatic.
-		$enabled_bypass_flags = json_decode( (string) ( $profile['bypass_flags'] ?? '' ), true );
-		$enabled_bypass_flags = is_array( $enabled_bypass_flags ) ? $enabled_bypass_flags : array();
+		// $enabled_bypass_flags is decoded above, before the hash loop.
 		foreach ( self::BYPASS_CATALOG as $flag => $entry ) {
 			if ( ! in_array( $flag, $enabled_bypass_flags, true ) ) {
 				continue;
@@ -682,6 +703,33 @@ class Policy_Builder extends Header_Builder {
 		}
 
 		return $directives;
+	}
+
+	/**
+	 * Whether $directive will carry 'unsafe-hashes' in the emitted policy:
+	 * already present in the profile/override source list (keywords match
+	 * case-insensitively), or added later in build_policy_string() by an
+	 * enabled BYPASS_CATALOG entry for that directive. Only when it will do
+	 * attribute-context hashes for that directive take effect (CSP3 §6.1.2).
+	 */
+	private function directive_will_have_unsafe_hashes( array $directives, string $directive, array $enabled_bypass_flags ): bool {
+		if ( ! isset( $directives[ $directive ] ) || ! is_array( $directives[ $directive ] ) ) {
+			return false;
+		}
+
+		foreach ( $directives[ $directive ] as $source ) {
+			if ( is_string( $source ) && 0 === strcasecmp( trim( $source ), "'unsafe-hashes'" ) ) {
+				return true;
+			}
+		}
+
+		foreach ( self::BYPASS_CATALOG as $flag => $entry ) {
+			if ( $directive === $entry['directive'] && "'unsafe-hashes'" === $entry['token'] && in_array( $flag, $enabled_bypass_flags, true ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	// ── Policy input (delegated to $data_loader; see class docblock and
