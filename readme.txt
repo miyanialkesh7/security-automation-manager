@@ -128,6 +128,8 @@ When an administrator configures automatic cPanel deployment, once a certificate
 * Fixed: Content Security Policy hash learning no longer records JSON-LD structured data (such as SEO schema markup), which browsers never run and CSP doesn't control. On sites with many pages these filled the policy's size budget and could push out the approvals real inline scripts need.
 * Fixed: an inline script that directly follows an external script tag is now recognised and approved correctly.
 * Fixed: hashes for inline style attributes are no longer sent in the policy unless they can take effect, so they no longer use up the policy's size budget. A manual rescan now also retires approvals unused for 30 days.
+* Improved: Advanced Intelligence → Campaigns now shows how many IPs are active in the last 24 hours separately from the count recorded when the campaign was detected, and marks your own IP in the list.
+* Fixed: blocking a campaign's participants no longer includes your own IP or the site's own loopback address, so it can't lock you out of your dashboard. The button now says how many IPs it will block.
 
 = 2.11.2 =
 
