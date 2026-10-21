@@ -874,7 +874,19 @@ if ( ! class_exists( 'WP_REST_Server' ) ) {
 
 if ( ! class_exists( 'WP_REST_Response' ) ) {
 	class WP_REST_Response {
-		public function __construct( public mixed $data = null, public int $status = 200 ) {}
+		/** @param array<string, string> $headers */
+		public function __construct( public mixed $data = null, public int $status = 200, public array $headers = array() ) {}
+
+		public function header( string $key, string $value, bool $replace = true ): void {
+			if ( $replace || ! isset( $this->headers[ $key ] ) ) {
+				$this->headers[ $key ] = $value;
+			}
+		}
+
+		/** @return array<string, string> */
+		public function get_headers(): array {
+			return $this->headers;
+		}
 
 		public function get_status(): int {
 			return $this->status;
