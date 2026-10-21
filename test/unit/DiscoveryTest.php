@@ -2,12 +2,14 @@
 /**
  * Unit tests for WP_SAM\CSP\Discovery.
  *
- * Focused on get_crawl_urls(), tested via reflection since it's private.
+ * Focused on get_crawl_urls(), tested via reflection since it's private,
+ * and on which surfaces/URLs run_scan() actually crawls.
  */
 
 declare( strict_types=1 );
 
 use PHPUnit\Framework\TestCase;
+use WP_SAM\CSP\Csp_Surfaces;
 use WP_SAM\CSP\Discovery;
 use WP_SAM\CSP\Policy_Change_Manager;
 use WP_SAM\Modules\Audit_Log;
@@ -103,6 +105,40 @@ class DiscoveryTest extends TestCase {
 
 	public function test_unknown_surface_has_no_crawl_targets(): void {
 		$this->assertSame( [], $this->get_crawl_urls( 'not-a-real-surface' ) );
+	}
+
+	public function test_api_surface_has_no_crawl_targets(): void {
+		// The REST API isn't a CSP surface (Csp_Surfaces): no CSP is ever
+		// sent on a REST response, and JSON has no subresources to discover.
+		$this->assertSame( [], $this->get_crawl_urls( 'api' ) );
+	}
+
+	public function test_multi_surface_scan_crawls_only_csp_surfaces_and_never_the_rest_api(): void {
+		$gate = $this->createMock( Feature_Gate::class );
+		$gate->method( 'is_allowed' )->willReturnCallback( static fn( string $feature ): bool => 'multi_surface_scan' === $feature );
+
+		$discovery = new class( $this->audit, $gate, $this->createMock( Policy_Change_Manager::class ) ) extends Discovery {
+			/** @var array<int, array{0: string, 1: string}> */
+			public array $crawled = [];
+
+			public function crawl_url( string $url, string $surface ): array {
+				$this->crawled[] = [ $url, $surface ];
+				return [ 'added' => 0, 'updated' => 0 ];
+			}
+		};
+
+		$discovery->run_scan();
+
+		$this->assertNotEmpty( $discovery->crawled );
+		foreach ( $discovery->crawled as [ $url, $surface ] ) {
+			$this->assertContains( $surface, Csp_Surfaces::ALL );
+			$this->assertNotSame( rest_url(), $url );
+			$this->assertStringNotContainsString( '/wp-json', $url );
+		}
+		$this->assertSame(
+			[ [ 'https://example.com', 'frontend' ], [ 'https://example.com/wp-login.php', 'login' ] ],
+			$discovery->crawled
+		);
 	}
 
 	/**

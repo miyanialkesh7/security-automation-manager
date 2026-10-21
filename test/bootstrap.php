@@ -623,8 +623,16 @@ if ( ! function_exists( 'home_url' ) ) {
 }
 
 if ( ! function_exists( 'get_home_url' ) ) {
-	function get_home_url( int $blog_id = 0, string $path = '', string $scheme = '' ): string {
+	// $blog_id is untyped, as in core -- Discovery::get_crawl_urls() calls
+	// get_home_url( '/' ), which core accepts on a single site.
+	function get_home_url( $blog_id = null, string $path = '', string $scheme = '' ): string {
 		return home_url( $path, $scheme );
+	}
+}
+
+if ( ! function_exists( 'wp_login_url' ) ) {
+	function wp_login_url( string $redirect = '', bool $force_reauth = false ): string {
+		return 'https://example.com/wp-login.php';
 	}
 }
 
@@ -1130,6 +1138,38 @@ if ( ! function_exists( 'dbDelta' ) ) {
 if ( ! function_exists( 'current_user_can' ) ) {
 	function current_user_can( string $capability ): bool {
 		return $GLOBALS['_wp_current_user_can'][ $capability ] ?? false;
+	}
+}
+
+// ── AJAX response stubs ───────────────────────────────────────────────────────
+// Core's wp_send_json_*() print JSON and die; these throw instead, so a test
+// can call an Admin_UI AJAX handler directly, catch the response, and know
+// nothing after it ran. check_ajax_referer() always passes -- nonce checks
+// are covered separately (NonceManagerTest) and aren't what these tests are
+// about.
+if ( ! class_exists( 'WP_SAM_Test_Json_Response' ) ) {
+	class WP_SAM_Test_Json_Response extends RuntimeException {
+		public function __construct( public readonly bool $success, public readonly mixed $data = null, public readonly ?int $status_code = null ) {
+			parent::__construct( $success ? 'wp_send_json_success' : 'wp_send_json_error' );
+		}
+	}
+}
+
+if ( ! function_exists( 'check_ajax_referer' ) ) {
+	function check_ajax_referer( $action = -1, $query_arg = false, $stop = true ): int {
+		return 1;
+	}
+}
+
+if ( ! function_exists( 'wp_send_json_error' ) ) {
+	function wp_send_json_error( mixed $value = null, ?int $status_code = null, int $flags = 0 ): never {
+		throw new WP_SAM_Test_Json_Response( false, $value, $status_code );
+	}
+}
+
+if ( ! function_exists( 'wp_send_json_success' ) ) {
+	function wp_send_json_success( mixed $value = null, ?int $status_code = null, int $flags = 0 ): never {
+		throw new WP_SAM_Test_Json_Response( true, $value, $status_code );
 	}
 }
 
