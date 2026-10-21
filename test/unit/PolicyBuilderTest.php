@@ -15,6 +15,7 @@
 declare( strict_types=1 );
 
 use PHPUnit\Framework\TestCase;
+use WP_SAM\CSP\Csp_Delivery_Log;
 use WP_SAM\CSP\Policy_Builder;
 use WP_SAM\CSP\Policy_Data_Loader;
 use WP_SAM\Modules\Audit_Log;
@@ -64,6 +65,41 @@ class PolicyBuilderTest extends TestCase {
 		$this->assertArrayHasKey( 'wp_redirect', $GLOBALS['_wp_actions'] );
 		$this->assertSame( 1, $GLOBALS['_wp_actions']['wp_redirect'][0][1] );
 		$this->assertSame( 2, $GLOBALS['_wp_actions']['wp_redirect'][0][2] );
+	}
+
+	public function test_register_also_emits_the_admin_policy_on_admin_init(): void {
+		$this->builder->register();
+
+		$this->assertArrayHasKey( 'admin_init', $GLOBALS['_wp_actions'] );
+		$this->assertSame( array( $this->builder, 'emit_admin_header' ), $GLOBALS['_wp_actions']['admin_init'][0][0] );
+		$this->assertSame( 1, $GLOBALS['_wp_actions']['admin_init'][0][1] );
+	}
+
+	public function test_emit_admin_header_skips_admin_ajax(): void {
+		// Counts emit_header() calls instead of sending real headers, which
+		// can't be observed in-process (see this file's docblock).
+		$builder = new class( $this->gate ) extends Policy_Builder {
+			public int $emit_calls = 0;
+
+			public function emit_header(): void {
+				++$this->emit_calls;
+			}
+		};
+
+		$GLOBALS['_wp_doing_ajax'] = true;
+		$builder->emit_admin_header();
+		$this->assertSame( 0, $builder->emit_calls );
+
+		$GLOBALS['_wp_doing_ajax'] = false;
+		$builder->emit_admin_header();
+		$this->assertSame( 1, $builder->emit_calls );
+	}
+
+	public function test_the_api_surface_never_gets_the_learned_policy(): void {
+		$method = new ReflectionMethod( $this->builder, 'emit_profile_header' );
+
+		$this->assertFalse( $method->invoke( $this->builder, $this->make_profile( array( 'default-src' => array( "'self'" ) ) ), 'api' ) );
+		$this->assertSame( array(), Csp_Delivery_Log::get( 'api' ) );
 	}
 
 	public function test_detect_surface_uses_admin_path_for_admin_404s(): void {
@@ -695,6 +731,8 @@ class PolicyBuilderTest extends TestCase {
 		$builder                 = $this->make_db_stub_builder( approved_hashes: $approved_hashes, audit: $audit );
 
 		$builder->build_policy_string( $profile, 'frontend' );
+
+		$this->assertArrayHasKey( 'last_trimmed', Csp_Delivery_Log::get( 'frontend' ) );
 	}
 
 	public function test_build_adds_unsafe_hashes_when_bypass_flag_enabled(): void {

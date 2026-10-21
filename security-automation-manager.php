@@ -335,7 +335,7 @@ define( 'WP_SAM_VERSION', '2.11.1' );
  *        private/commercial build -- neither public release channel has
  *        ever shipped a working checkout path.
  */
-define( 'WP_SAM_DB_VERSION', '46' );
+define( 'WP_SAM_DB_VERSION', '47' );
 
 define( 'WP_SAM_FILE', __FILE__ );
 define( 'WP_SAM_DIR', plugin_dir_path( __FILE__ ) );

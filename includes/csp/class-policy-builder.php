@@ -297,11 +297,46 @@ class Policy_Builder extends Header_Builder {
 
 	// ── Header emission ───────────────────────────────────────────────────────
 
+	/**
+	 * Header_Builder's send_headers/login_init/wp_redirect hooks never reach
+	 * an ordinary wp-admin page: WordPress fires send_headers only from
+	 * WP::main(), the frontend pipeline, which wp-admin never runs. So the
+	 * admin surface's policy was never sent, and its "no violations" meant
+	 * nothing. admin_init fires on every admin page before any output.
+	 * CSP only, deliberately: the other header pillars also skip wp-admin,
+	 * and some of them (X-Frame-Options, COOP/COEP) can break admin
+	 * features, so extending them there is a separate decision.
+	 */
+	public function register(): void {
+		parent::register();
+		add_action( 'admin_init', array( $this, 'emit_admin_header' ), 1 );
+	}
+
+	/**
+	 * admin-ajax.php also fires admin_init; its responses are JSON or HTML
+	 * fragments that never render as a page, so building a policy for each
+	 * one would be pure overhead.
+	 */
+	public function emit_admin_header(): void {
+		if ( wp_doing_ajax() ) {
+			return;
+		}
+		$this->emit_header();
+	}
+
 	protected function is_profile_active( array $profile ): bool {
 		return 'disabled' !== $profile['mode'];
 	}
 
 	protected function emit_profile_header( array $profile, string $surface ): bool {
+		// REST responses are JSON: they load nothing a policy could govern,
+		// and WordPress serves them during parse_request, before
+		// send_headers, so this surface's learned policy never applied.
+		// Rest_Csp_Header sends a fixed lock-down policy on them instead.
+		if ( 'api' === $surface ) {
+			return false;
+		}
+
 		$policy = $this->build_policy_string( $profile, $surface );
 		if ( empty( $policy ) ) {
 			return false;
@@ -317,6 +352,7 @@ class Policy_Builder extends Header_Builder {
 		}
 
 		header( $header_name . ': ' . $policy );
+		Csp_Delivery_Log::record_sent( $surface );
 		return true;
 	}
 
@@ -473,6 +509,7 @@ class Policy_Builder extends Header_Builder {
 		}
 
 		if ( $hashes_dropped > 0 ) {
+			Csp_Delivery_Log::record_trimmed( $surface );
 			$this->log_once_per_hour(
 				$surface,
 				'hash_budget_exceeded',

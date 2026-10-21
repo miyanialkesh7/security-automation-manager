@@ -17,6 +17,7 @@ use WP_SAM\CSP\Hash_Manager;
 use WP_SAM\CSP\Learning_Window;
 use WP_SAM\CSP\Nonce_Manager;
 use WP_SAM\CSP\Policy_Builder;
+use WP_SAM\CSP\Rest_Csp_Header;
 use WP_SAM\CSP\Scheduler;
 use WP_SAM\CSP\Violation_Reporter;
 use WP_SAM\Intelligence\Account_Integrity_Recorder;
@@ -254,6 +255,7 @@ final class Plugin {
 		// Register CSP and simple pillar header emission on all request types.
 		$this->nonce_manager->register();
 		$this->policy_builder->register();
+		( new Rest_Csp_Header() )->register();
 		$this->x_frame_options_builder->register();
 		$this->x_content_type_options_builder->register();
 		$this->information_masking_builder->register();
