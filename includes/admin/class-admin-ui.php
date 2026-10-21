@@ -1644,7 +1644,9 @@ class Admin_UI {
 				$campaign,
 				get_current_user_id(),
 				$note,
-				new Ip_Rule_Store()
+				new Ip_Rule_Store(),
+				Campaign_Detector::DEFAULT_WINDOW_HOURS,
+				Ip_Resolver::resolve()
 			);
 		}
 
@@ -2440,6 +2442,14 @@ class Admin_UI {
 	// ── Admin notices ─────────────────────────────────────────────────────────
 
 	public function display_admin_notices(): void {
+		// admin_notices fires on every wp-admin screen, including a
+		// subscriber's own profile.php, and the queue below is drained the
+		// first time it renders -- so only a user who can open SAM's own
+		// pages (manage_options, see add_menu_pages()) may see or clear it.
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
 		// Platform constraint warning (R9): wp-admin strict CSP is best-effort because
 		// WordPress core Trac #59446 is unresolved. Only show when the admin surface
 		// profile is in enforce mode, and only once per session per user.

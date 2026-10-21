@@ -381,6 +381,109 @@ class HashManagerTest extends TestCase {
 		$this->assertSame( array_keys( $hashes_unix ), array_keys( $hashes_windows ) );
 	}
 
+	public function test_extract_and_record_hashes_only_the_inline_script_after_an_external_one(): void {
+		// Regression: the old pattern only excluded src= as the first
+		// attribute and required non-empty content, so this captured
+		// '</script>\n<script id="b">var b=1;' as one junk block and the
+		// real inline script never got a valid hash.
+		$manager = $this->make_db_stub_manager();
+		$html    = "<script type=\"text/javascript\" src=\"/a.js\"></script>\n<script id=\"b\">var b=1;</script>";
+
+		$this->invoke_extract( $manager, $html, 'script', 'script-src', 'frontend' );
+
+		$this->assertSame( [ $this->b64_hash( 'var b=1;' ) ], array_keys( $manager->get_captured_hashes() ) );
+	}
+
+	public function test_extract_and_record_ignores_external_scripts_whose_src_is_not_the_first_attribute(): void {
+		$manager = $this->make_db_stub_manager();
+		// Content is deliberately non-empty: a src'd script ignores it, so
+		// the empty-content skip alone must not be what excludes these.
+		$html    = '<script id="a" defer src="/a.js">ignored();</script>'
+			. "<script data-x='1' SRC = '/b.js'>ignored();</script>"
+			. '<script async src=/c.js>ignored();</script>'
+			. '<script src>ignored();</script>';
+
+		$this->invoke_extract( $manager, $html, 'script', 'script-src', 'frontend' );
+
+		$this->assertEmpty( $manager->get_captured_hashes() );
+	}
+
+	public function test_extract_and_record_does_not_mistake_lookalike_attributes_for_src(): void {
+		// data-src (lazy loaders) and "src=" inside another attribute's
+		// quoted value are not a src attribute -- the inline content runs.
+		$manager = $this->make_db_stub_manager();
+		$html    = '<script data-src="/lazy.js">a();</script><script data-note="x src=y">b();</script>';
+
+		$this->invoke_extract( $manager, $html, 'script', 'script-src', 'frontend' );
+
+		$this->assertSame(
+			[ $this->b64_hash( 'a();' ), $this->b64_hash( 'b();' ) ],
+			array_keys( $manager->get_captured_hashes() )
+		);
+	}
+
+	public function test_extract_and_record_does_not_match_lookalike_tag_names(): void {
+		$manager = $this->make_db_stub_manager();
+		$html    = '<scripts>no();</scripts><script-x>no();</script-x><script>yes();</script>';
+
+		$this->invoke_extract( $manager, $html, 'script', 'script-src', 'frontend' );
+
+		$this->assertSame( [ $this->b64_hash( 'yes();' ) ], array_keys( $manager->get_captured_hashes() ) );
+	}
+
+	public function test_extract_and_record_skips_json_ld_data_blocks(): void {
+		// Yoast's per-page schema graph: never executed, so CSP never
+		// checks it -- one unique, useless hash per page otherwise.
+		$manager = $this->make_db_stub_manager();
+		$html    = '<script type="application/ld+json" class="yoast-schema-graph">{"@context":"https://schema.org","@graph":[]}</script>';
+
+		$this->invoke_extract( $manager, $html, 'script', 'script-src', 'frontend' );
+
+		$this->assertEmpty( $manager->get_captured_hashes() );
+	}
+
+	public function test_extract_and_record_skips_application_json_data_blocks(): void {
+		$manager = $this->make_db_stub_manager();
+		$html    = '<script type="application/json" id="cfg">{"a":1}</script>'
+			. '<script type=" Application/JSON ">{"b":2}</script>'
+			. '<script type=application/ld+json>{"c":3}</script>';
+
+		$this->invoke_extract( $manager, $html, 'script', 'script-src', 'frontend' );
+
+		$this->assertEmpty( $manager->get_captured_hashes() );
+	}
+
+	public function test_extract_and_record_still_hashes_placeholder_typed_and_csp_governed_scripts(): void {
+		// Optimisation/consent plugins later re-insert these as executable
+		// inline scripts with the same content -- the learned hash is what
+		// lets them run under an enforced policy. importmap is CSP-checked.
+		$manager = $this->make_db_stub_manager();
+		$html    = '<script type="litespeed/javascript">ls();</script>'
+			. '<script type="text/plain" data-category="analytics">tp();</script>'
+			. '<script type="importmap">{"imports":{"a":"/a.js"}}</script>';
+
+		$this->invoke_extract( $manager, $html, 'script', 'script-src', 'frontend' );
+
+		$this->assertSame(
+			[ $this->b64_hash( 'ls();' ), $this->b64_hash( 'tp();' ), $this->b64_hash( '{"imports":{"a":"/a.js"}}' ) ],
+			array_keys( $manager->get_captured_hashes() )
+		);
+	}
+
+	public function test_extract_and_record_style_blocks_unaffected_by_script_only_skips(): void {
+		// src/type filtering is <script>-only; an empty <style> no longer
+		// swallows the next one, and ">" inside a quoted media query is fine.
+		$manager = $this->make_db_stub_manager();
+		$html    = '<style></style><style type="text/css">a{}</style><style media="(width > 600px)">b{}</style>';
+
+		$this->invoke_extract( $manager, $html, 'style', 'style-src', 'frontend' );
+
+		$this->assertSame(
+			[ $this->b64_hash( 'a{}' ), $this->b64_hash( 'b{}' ) ],
+			array_keys( $manager->get_captured_hashes() )
+		);
+	}
+
 	// ── inline style attribute extraction (via reflection) ───────────────────
 
 	public function test_extract_style_attributes_captures_inline_style_attr(): void {
@@ -658,6 +761,13 @@ class HashManagerTest extends TestCase {
 				return $retired;
 			}
 		};
+	}
+
+	/**
+	 * Base64 sha256 of $content -- the key get_captured_hashes() uses.
+	 */
+	private function b64_hash( string $content ): string {
+		return base64_encode( hash( 'sha256', $content, true ) );
 	}
 
 	/**

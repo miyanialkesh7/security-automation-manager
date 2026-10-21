@@ -197,6 +197,22 @@ class PageTrafficTest extends TestCase {
 		$this->assertStringNotContainsString( 'width:200px', $output );
 	}
 
+	public function test_well_known_subtab_shows_an_absent_file_as_absent_not_failed(): void {
+		$_GET['tab']    = 'network-intelligence';
+		$_GET['subtab'] = 'well-known';
+		$GLOBALS['_wpdb_get_results'] = array();
+		update_option( 'wp_sam_agents_rules_last_fetch_status', 'absent' );
+
+		ob_start();
+		require WP_SAM_DIR . 'includes/admin/views/page-traffic.php';
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['tab'], $_GET['subtab'] );
+
+		$this->assertStringContainsString( 'Absent', $output );
+		$this->assertStringNotContainsString( 'Failed', $output );
+	}
+
 	// ── Network Intelligence tab -- Geo-IP sub-tab's Country Block List ─────
 
 	public function test_geoip_subtab_renders_country_grid_with_nothing_blocked(): void {

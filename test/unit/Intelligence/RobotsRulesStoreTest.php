@@ -94,14 +94,51 @@ class RobotsRulesStoreTest extends TestCase {
 		$this->assertSame( array( '/wp-admin/' ), get_option( 'wp_sam_robots_disallow_rules' ) );
 	}
 
-	public function test_refresh_keeps_existing_rules_on_a_non_200_response(): void {
+	public function test_refresh_treats_a_404_as_absent_and_clears_cached_rules(): void {
+		// A site with no robots.txt is an answer, not a fetch failure --
+		// it must not raise a daily warning, and stale rules from an
+		// earlier copy of the file must not keep being enforced.
 		update_option( 'wp_sam_robots_disallow_rules', array( '/wp-admin/' ) );
 		$store = new Robots_Rules_Store( fn( string $url ) => $this->http_response( '', 404 ) );
 
 		$result = $store->refresh();
 
+		$this->assertSame( 'absent', $result['status'] );
+		$this->assertSame( 'No /robots.txt on this site (HTTP 404).', $result['message'] );
+		$this->assertSame( array(), $store->rules() );
+		$this->assertSame( 'absent', $store->last_fetch_status() );
+	}
+
+	public function test_refresh_keeps_existing_rules_on_a_500_response(): void {
+		update_option( 'wp_sam_robots_disallow_rules', array( '/wp-admin/' ) );
+		$store = new Robots_Rules_Store( fn( string $url ) => $this->http_response( '', 500 ) );
+
+		$result = $store->refresh();
+
 		$this->assertSame( 'failed', $result['status'] );
 		$this->assertSame( array( '/wp-admin/' ), get_option( 'wp_sam_robots_disallow_rules' ) );
+	}
+
+	public function test_default_fetcher_refuses_a_redirect_to_another_host(): void {
+		// The staging-site case: .htaccess 301s non-approved IPs to the
+		// production domain. Production's robots.txt must never be cached
+		// as this site's own.
+		update_option( 'wp_sam_robots_disallow_rules', array( '/wp-admin/' ) );
+		$GLOBALS['_wp_remote_get_response_queue'] = array(
+			array(
+				'response' => array( 'code' => 301 ),
+				'headers'  => array( 'Location' => 'https://production.example.org/robots.txt' ),
+				'body'     => '',
+			),
+			$this->http_response( "User-agent: *\nDisallow: /production-only/\n" ),
+		);
+
+		$result = ( new Robots_Rules_Store() )->refresh();
+
+		$this->assertSame( 'failed', $result['status'] );
+		$this->assertStringContainsString( 'Redirected to another host (production.example.org, HTTP 301)', $result['message'] );
+		$this->assertSame( array( '/wp-admin/' ), get_option( 'wp_sam_robots_disallow_rules' ) );
+		$this->assertCount( 1, $GLOBALS['_wp_remote_get_requests'] );
 	}
 
 	public function test_last_refreshed_at_is_null_before_any_refresh(): void {
