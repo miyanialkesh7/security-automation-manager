@@ -30,6 +30,7 @@ use WP_SAM\Intelligence\Change_Window_Store;
 use WP_SAM\Intelligence\Drift_Store;
 use WP_SAM\Intelligence\Event_Store;
 use WP_SAM\Intelligence\Honeypath_Store;
+use WP_SAM\Intelligence\Ip_Resolver;
 
 $base_url     = admin_url( 'admin.php?page=security-automation-manager-advanced' );
 $tab          = isset( $_GET['tab'] ) ? sanitize_text_field( wp_unslash( $_GET['tab'] ) ) : 'campaigns'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
@@ -102,6 +103,7 @@ $tab_help = array(
 		<?php
 		$campaigns   = ( new Campaign_Store() )->all();
 		$event_store = new Event_Store();
+		$viewer_ip   = Ip_Resolver::resolve();
 		?>
 
 		<div class="wp-sam-table-wrap">
@@ -130,19 +132,59 @@ $tab_help = array(
 				// same list the block action would actually act on, not a
 				// possibly-stale count from when the row was last detected.
 				$participant_ips = $event_store->distinct_ips( (string) $campaign['detector_id'], (string) $campaign['surface'], Campaign_Detector::DEFAULT_WINDOW_HOURS );
+				$blockable_ips   = Campaign_Detector::blockable_ips( $participant_ips, $viewer_ip );
 				$ips_shown       = array_slice( $participant_ips, 0, 100 );
 				$ips_remaining   = count( $participant_ips ) - count( $ips_shown );
+				$live_count      = count( $participant_ips );
+				$detected_count  = (int) $campaign['participant_count'];
+
+				// The stored participant_count is a snapshot from the last
+				// scan that recorded this campaign; the IP list (and what
+				// Block acts on) is re-queried live for the same window.
+				// Show both, labelled, so a list shorter than the headline
+				// count doesn't look like missing data.
+				$ips_markup = implode(
+					', ',
+					array_map(
+						static function ( string $ip ) use ( $viewer_ip ): string {
+							$markup = '<code>' . esc_html( $ip ) . '</code>';
+							if ( '' !== $viewer_ip && $ip === $viewer_ip ) {
+								$markup .= ' ' . esc_html__( '(your IP)', 'vcns-security-automation-manager' );
+							}
+							return $markup;
+						},
+						$ips_shown
+					)
+				);
 				?>
 			<tr>
 				<td class="wp-sam-col-technical"><code><?php echo esc_html( (string) $campaign['detector_id'] ); ?></code></td>
 				<td class="wp-sam-col-surface"><?php echo esc_html( ucfirst( (string) $campaign['surface'] ) ); ?></td>
 				<td class="wp-sam-col-count">
-					<?php echo esc_html( (string) $campaign['participant_count'] ); ?> <?php esc_html_e( 'distinct IPs', 'vcns-security-automation-manager' ); ?>
+					<?php
+					echo esc_html(
+						sprintf(
+							/* translators: %d: number of distinct IPs that triggered this detector within the detection window */
+							_n( '%d active', '%d active', $live_count, 'vcns-security-automation-manager' ),
+							$live_count
+						)
+					);
+					?>
 					<?php if ( ! empty( $participant_ips ) ) : ?>
 					<span class="dashicons dashicons-info-outline wp-sam-meta-icon" tabindex="0">
 						<span class="wp-sam-meta-popover" role="tooltip">
-							<div class="wp-sam-meta-row"><strong><?php esc_html_e( 'Currently live participant IPs:', 'vcns-security-automation-manager' ); ?></strong></div>
-							<div class="wp-sam-meta-row"><code><?php echo esc_html( implode( ', ', $ips_shown ) ); ?></code></div>
+							<div class="wp-sam-meta-row"><strong>
+								<?php
+								echo esc_html(
+									sprintf(
+										/* translators: %d: detection window in hours */
+										__( 'IPs active in the last %d hours:', 'vcns-security-automation-manager' ),
+										(int) Campaign_Detector::DEFAULT_WINDOW_HOURS
+									)
+								);
+								?>
+							</strong></div>
+							<div class="wp-sam-meta-row"><?php echo $ips_markup; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- each IP and label escaped while building $ips_markup above. ?></div>
 							<?php if ( $ips_remaining > 0 ) : ?>
 							<div class="wp-sam-meta-row">
 								<?php
@@ -159,7 +201,20 @@ $tab_help = array(
 						</span>
 					</span>
 					<?php else : ?>
-					<span class="dashicons dashicons-info-outline wp-sam-meta-icon wp-sam-meta-icon--empty" title="<?php esc_attr_e( 'No participant is still active within the detection window -- the stored count reflects when this campaign was last detected.', 'vcns-security-automation-manager' ); ?>"></span>
+					<span class="dashicons dashicons-info-outline wp-sam-meta-icon wp-sam-meta-icon--empty" title="<?php esc_attr_e( 'No participant is still active within the detection window.', 'vcns-security-automation-manager' ); ?>"></span>
+					<?php endif; ?>
+					<?php if ( $detected_count !== $live_count ) : ?>
+					<br /><span class="description">
+						<?php
+						echo esc_html(
+							sprintf(
+								/* translators: %d: number of distinct IPs counted when this campaign was last detected */
+								_n( '%d when detected', '%d when detected', $detected_count, 'vcns-security-automation-manager' ),
+								$detected_count
+							)
+						);
+						?>
+					</span>
 					<?php endif; ?>
 				</td>
 				<td class="wp-sam-col-status"><?php echo esc_html( ucfirst( (string) $campaign['status'] ) ); ?></td>
@@ -181,7 +236,22 @@ $tab_help = array(
 						<input type="hidden" name="action" value="wp_sam_campaign_block" />
 						<input type="hidden" name="campaign_id" value="<?php echo esc_attr( (string) $campaign_id ); ?>" />
 						<input type="hidden" name="note" class="wp-sam-campaign-note-target" />
-						<button type="submit" class="button button-primary button-small" onclick="return confirm('<?php echo esc_js( __( 'Block every currently-live participant IP? This is an explicit, immediate action.', 'vcns-security-automation-manager' ) ); ?>');"><?php esc_html_e( 'Block Participants', 'vcns-security-automation-manager' ); ?></button>
+						<?php $blockable_count = count( $blockable_ips ); ?>
+						<?php if ( $blockable_count > 0 ) : ?>
+						<button type="submit" class="button button-primary button-small" onclick="return confirm('<?php echo esc_js( sprintf( /* translators: 1: number of IPs that will be blocked, 2: detection window in hours */ _n( 'Block %1$d IP active in the last %2$d hours, on every surface? Your own IP is never included. This is an explicit, immediate action.', 'Block %1$d IPs active in the last %2$d hours, on every surface? Your own IP is never included. This is an explicit, immediate action.', $blockable_count, 'vcns-security-automation-manager' ), $blockable_count, (int) Campaign_Detector::DEFAULT_WINDOW_HOURS ) ); ?>');">
+							<?php
+							echo esc_html(
+								sprintf(
+									/* translators: %d: number of IPs that will be blocked */
+									_n( 'Block %d Active IP', 'Block %d Active IPs', $blockable_count, 'vcns-security-automation-manager' ),
+									$blockable_count
+								)
+							);
+							?>
+						</button>
+						<?php else : ?>
+						<button type="button" class="button button-small" disabled title="<?php echo esc_attr( sprintf( /* translators: %d: detection window in hours */ __( 'No IP to block: none is active in the last %d hours apart from your own.', 'vcns-security-automation-manager' ), (int) Campaign_Detector::DEFAULT_WINDOW_HOURS ) ); ?>"><?php esc_html_e( 'Nothing to Block', 'vcns-security-automation-manager' ); ?></button>
+						<?php endif; ?>
 					</form>
 					<?php else : ?>
 						<?php echo esc_html( (string) $campaign['disposition_note'] ); ?>

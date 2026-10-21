@@ -101,4 +101,29 @@ class CampaignDetectorTest extends TestCase {
 		$this->assertCount( 1, $status_update );
 		$this->assertSame( 'blocked', $status_update[0]['data']['status'] );
 	}
+
+	public function test_blockable_ips_excludes_the_actor_ip_and_loopback(): void {
+		$ips = array( '203.0.113.1', '91.125.72.135', '127.0.0.1', '::1', '203.0.113.2' );
+
+		$this->assertSame(
+			array( '203.0.113.1', '203.0.113.2' ),
+			Campaign_Detector::blockable_ips( $ips, '91.125.72.135' )
+		);
+	}
+
+	public function test_block_participants_never_blocks_the_acting_admins_own_ip(): void {
+		$GLOBALS['_wpdb_get_col'] = array( '203.0.113.1', '91.125.72.135', '127.0.0.1' );
+
+		$campaign = array(
+			'id'          => 5,
+			'detector_id' => 'header-consistency',
+			'surface'     => 'frontend',
+		);
+
+		$blocked = $this->detector->block_participants( $campaign, 1, 'Confirmed malicious.', new Ip_Rule_Store(), 24, '91.125.72.135' );
+
+		$this->assertSame( 1, $blocked );
+		$this->assertCount( 1, $GLOBALS['_wpdb_inserted_rows'] );
+		$this->assertSame( '203.0.113.1', $GLOBALS['_wpdb_inserted_rows'][0]['data']['cidr'] );
+	}
 }
