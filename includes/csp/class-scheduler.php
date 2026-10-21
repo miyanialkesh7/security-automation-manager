@@ -140,6 +140,10 @@ class Scheduler {
 			);
 
 			$this->audit->finish_scan( $scan_id, $results );
+			// Same age-based retirement the daily cron runs -- otherwise a site
+			// whose cron rarely fires keeps every stale hash active and in the
+			// header's byte budget until it does.
+			$hash_mgr->prune_stale_by_age();
 			return $results;
 
 		} catch ( \Throwable $e ) {

@@ -325,8 +325,9 @@ class Hash_Manager {
 	 * automatically -- it's an explicit, labelled, per-surface opt-in
 	 * (BYPASS_CATALOG's style_src_attr_unsafe_hashes entry, Profiles tab), a
 	 * scanner-flaggable keyword that must be a conscious admin decision.
-	 * Hashes captured here sit inert in the header until an admin enables
-	 * that toggle for the surface.
+	 * Hashes captured here stay in the inventory, but Policy_Builder leaves
+	 * them out of the header (and its hash byte budget) until an admin
+	 * enables that toggle for the surface -- without it they match nothing.
 	 *
 	 * Regex-based extraction over raw HTML (matching this class's existing
 	 * approach for <script>/<style> elements), not a real DOM parse -- a
@@ -373,11 +374,18 @@ class Hash_Manager {
 		string $directive,
 		string $surface
 	): void {
-		// Match inline blocks only (no src= or href= attribute on the opening tag).
-		// Uses a non-greedy match and the s (DOTALL) flag to handle multi-line content.
+		// Match every element of this tag, capturing its opening-tag attributes
+		// (group 1) and content (group 2) separately. The tag name must be
+		// followed by whitespace or ">" (never <scripts>/<script-x>), a quoted
+		// attribute value may contain ">", and the content is non-greedy up to
+		// the first closing tag and may be empty -- so an external
+		// <script src=...></script> ends at its own closing tag instead of
+		// swallowing "</script><script ...>" from the next element as content.
+		// Which elements to skip is decided below rather than in the pattern:
+		// a lookahead here could only ever see the first attribute.
+		// Uses the s (DOTALL) flag to handle multi-line content.
 		$pattern = sprintf(
-			'/<(?:%s)(?:\s+(?!src=)[^>]*)?>(.+?)<\/%s>/is',
-			preg_quote( $tag, '/' ),
+			'/<%1$s(\s(?:[^>"\']|"[^"]*"|\'[^\']*\')*)?>(.*?)<\/%1$s>/is',
 			preg_quote( $tag, '/' )
 		);
 
@@ -386,11 +394,37 @@ class Hash_Manager {
 		}
 
 		foreach ( $matches as $match ) {
-			$content = $match[1];
+			$attributes = $match[1];
+			$content    = $match[2];
 
 			// Skip empty or whitespace-only blocks.
 			if ( '' === trim( $content ) ) {
 				continue;
+			}
+
+			// A <script> carrying a src attribute (anywhere in the opening tag,
+			// not just first) runs the external file and never its inline
+			// content, so there is nothing for a hash to allow.
+			if ( 'script' === $tag && null !== self::find_tag_attribute( $attributes, 'src' ) ) {
+				continue;
+			}
+
+			// JSON data blocks (application/ld+json schema graphs such as
+			// Yoast's, one unique block per page; application/json payloads)
+			// are never executed, so CSP never checks them -- their hashes
+			// only crowd real inline-script hashes out of Policy_Builder's
+			// byte budget. Deliberately only these two exact types, not every
+			// non-JavaScript type: optimisation and consent plugins park real
+			// scripts under placeholder types (LiteSpeed's litespeed/javascript,
+			// WP Rocket's rocketlazyloadscript, consent managers' text/plain)
+			// and later re-insert them as executable inline scripts, which only
+			// the learned hash lets through under an enforced policy. importmap
+			// and speculationrules blocks are CSP-checked too, so stay hashed.
+			if ( 'script' === $tag ) {
+				$type = strtolower( trim( (string) self::find_tag_attribute( $attributes, 'type' ) ) );
+				if ( in_array( $type, array( 'application/ld+json', 'application/json' ), true ) ) {
+					continue;
+				}
 			}
 
 			// Skip nonce-carrying script/style tags -- these are already covered
@@ -410,6 +444,31 @@ class Hash_Manager {
 
 			$this->record_hash( $canonical, $directive, $surface );
 		}
+	}
+
+	/**
+	 * Returns the value of the first $name attribute in an opening tag's
+	 * attribute string -- quoted, unquoted, or '' for a bare attribute -- or
+	 * null when the tag doesn't carry one. Names match case-insensitively,
+	 * whitespace around "=" is allowed, and each quoted value is consumed
+	 * whole, so a "src=" inside another attribute's value is never mistaken
+	 * for the attribute itself.
+	 *
+	 * @param string $attributes Opening-tag attribute string (may be empty).
+	 * @param string $name       Attribute name to look for.
+	 */
+	private static function find_tag_attribute( string $attributes, string $name ): ?string {
+		if ( ! preg_match_all( '/([^\s"\'>\/=]+)(?:\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s"\'>]+)))?/', $attributes, $matches, PREG_SET_ORDER ) ) {
+			return null;
+		}
+
+		foreach ( $matches as $match ) {
+			if ( 0 === strcasecmp( $match[1], $name ) ) {
+				return ( $match[2] ?? '' ) . ( $match[3] ?? '' ) . ( $match[4] ?? '' );
+			}
+		}
+
+		return null;
 	}
 
 	// ── Public API ────────────────────────────────────────────────────────────
