@@ -4,6 +4,43 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows semantic versioning for plugin releases.
 
+## [2.11.1] - 2026-09-17
+
+### Fixed
+
+- No functional change from 2.11.0. `wporg-deploy.yml`'s release-provenance check (a deliberate, no-bypass hard failure -- see the workflow's own comment) requires the merge commit it's deploying to have come from a pull request whose head branch is exactly `release/v<version>`. 2.11.0's release branch was named `release/2.11.0-table-layout-standard` (topic-suffixed, matching the ordinary feature-branch convention rather than the release-branch one), so `wporg-v2.11.0` failed that check outright and never reached WordPress.org -- the GitHub Release and update feed were unaffected, since `release-package.yml` has no equivalent check. Republished as 2.11.1 from a correctly-named `release/v2.11.1` branch so the WordPress.org SVN deploy can proceed.
+
+## [2.11.0] - 2026-09-17
+
+### Changed
+
+- **SAM admin table layout standard** -- a repository-wide admin-table consistency refactor, delivered as foundation + 7 migration phases (PRs #419-426). UI/UX only: no security behaviour, stored data, decision logic, filtering/sorting, forms, permissions, API behaviour, or evidence calculations are touched on any migrated page.
+- Replaces the plugin's three previously-incompatible column-width strategies (natural sizing, `table-layout:fixed` + `nth-child()` percentages, `table-layout:fixed` + `nth-child()` pixels) with one system: nine semantic column-role classes (`wp-sam-col-compact`/`count`/`status`/`surface`/`datetime`/`primary`/`description`/`technical`/`actions`) applied directly to `<th>`/`<td>` in each view, plus a `.wp-sam-table-wrap` horizontal-overflow container. Compact columns use intrinsic sizing (`width:1%; white-space:nowrap`); flexible columns use `min-width` alone, never paired with a `max-width` that would force overflow. Column classes are applied by what a column *contains*, not by position -- `:nth-child()` couldn't express that, and was the root cause of every prior width-drift bug (a column's width rule silently pointing at the wrong column after a table gained or lost one).
+- Migrated every admin table across CSP dashboard, Overview/Settings, Scripts, Certificates, Cross-Origin Policies, Information Masking, Traffic Controls, Baseline & Drift, and Continuous/Advanced Intelligence.
+- Final cutover (Phase 7) deletes every remaining `nth-child()` width block in `admin.css` and removes the `fixed` class from every admin table across the 10 view files that still carried it -- every SAM table now uses the browser's natural/auto layout governed purely by the per-cell semantic classes. Also retires the blanket `.wp-sam-wrap .widefat code { word-break: break-all }` rule in favour of `.wp-sam-col-technical`'s own `word-break: break-word` + `overflow-wrap: anywhere`.
+- Inner-control width rules unrelated to column layout are untouched (e.g. the Profiles tab's automation-mode dropdown, the dependency-inventory classification `<select>`), as is Information Masking's deliberate table-level `max-width:600px` and every inline `style="width:"` on a form control -- documented as out of scope in the new `docs/admin-table-ux-standard.md`.
+- New regression coverage locks in the two table-cell classes `assets/js/admin.js` depends on directly (`wp-sam-state-badge`, `wp-sam-source-actions`), which had no prior test coverage anywhere. Full PHPUnit suite (2398/2398), PHPCS, and `tools/lint-php.php` clean; repo-wide audit confirms zero remaining `nth-child()`/`table-layout:fixed`/`widefat-fixed` occurrences outside explanatory doc comments.
+
+## [2.10.1] - 2026-09-17
+
+### Fixed
+
+- `Admin_UI::maybe_redirect_to_welcome()` (2.10.0's Welcome-page first-run redirect) could exit the request during `admin_init` before the later `admin_notices` hook ever ran, on every SAM admin page a WordPress user with incomplete onboarding visited -- including whichever page would otherwise have shown a persistent, must-always-show notice (`Rollback_Guard`'s schema-downgrade warning, or a failed certificate-renewal run). Caught by Release Verification CI (run 35161656965) on the 2.10.0 release branch, after merge to `main`, via a scenario expecting the schema-downgrade notice on a fresh admin login.
+- New `Admin_UI::has_urgent_admin_notice()` checks the same two conditions `display_admin_notices()` itself never delays, and the Welcome redirect now skips itself whenever either is active. New regression coverage in `AdminUITest.php`; `test/bootstrap.php` gained a `wp_doing_ajax()` stub (`maybe_redirect_to_welcome()` calls it, and no prior test exercised that method).
+
+## [2.10.0] - 2026-09-16
+
+### Added
+
+- **Customer-Centred Administration Experience** -- a presentation layer over existing capability, delivered as six sequential phases (PRs #408-#413). Does not change how the site is protected: every new class here reads existing stores/engines read-only and translates their output into customer-facing presentation, never re-implements a security decision.
+- `Admin\Presentation_Preferences` -- per-WordPress-user presentation preferences (relationship to the site, security familiarity, Simple/Balanced/Technical depth, landing emphasis) stored as `wp_sam_*` user meta, validated against fixed allow-lists, always scoped to `get_current_user_id()`. New `page-welcome.php` view (Welcome on first SAM visit, "Personal Preferences" editor thereafter) and a first-run `admin_init` redirect (`Admin_UI::maybe_redirect_to_welcome()`) -- skippable, blocks nothing, changes no security configuration.
+- `Admin\Action_Centre` -- consolidates `Recommendation_Engine::get_recommendations()` (unchanged, reused as-is) with two additional read-only aggregate sources (pending CSP source review queue, unclassified third-party dependencies) into one What-found/Why-it-matters/Recommended-action/What-will-happen/Evidence-link shape. New "Action Centre" tab on Settings/Overview; the existing Recommendations tab is untouched.
+- `Admin\Protection_Status` -- classifies existing state (CSP mode, Traffic Controls mode, dependency-governance pillar state, baseline/drift, certificate config) into a fixed six-state outcome vocabulary: Protected, Learning, Monitoring, Needs attention, Not in use, Unavailable. `Admin\Security_Scorecard` aggregates it into factual Protected/Learning/Needs-attention counts (deliberately not a numeric score); Learning and Monitoring share one tile, Not in use/Unavailable count toward neither.
+- Settings/Overview's "overview" tab now leads with the scorecard, a Recent Activity strip, the Protection Status table, and an Action Centre preview, above the existing tab navigation -- section order follows the user's landing-emphasis preference, except a critical Action Centre item always takes priority. New `Admin\Recent_Activity`, `Event_Store::total_occurrences_since()` (labelled "Detections," not "requests" -- summing rows across detector families can exceed actual request count) and `Drift_Store::count_detected_since()` (based on `first_seen_at`). "Requests observed" (raw traffic volume) is deliberately omitted: no store in this plugin persists total request volume.
+- Progressive disclosure: Protection Status rows and Action Centre items each carry a `technical_name` (always shown, only de-emphasised via CSS for Simple/Balanced) and a `technical_detail` evidence string inside a native `<details>` element, open by default only for Technical-depth users. `security_familiarity = new` adds one bounded "New to this?" helper line; every other level is unchanged.
+- `Status_Badge::render_protection_state()` -- icon + text always paired for the six-state vocabulary, never colour alone.
+- New test coverage: `PresentationPreferencesTest`, `ActionCentreTest`, `ProtectionStatusTest`, `SecurityScorecardTest`, `ProgressiveDisclosureTest`, plus `PageOverviewTest` extended to cover the `overview` and `action-centre` tabs' own render paths for the first time (uncovered two pre-existing test-environment-only gaps along the way: `Plugin::$cert_manager` and `Automation_Mode_Registry` are normally primed by `Plugin::bootstrap()`, never run by a bare unit test).
+
 ## [2.9.107] - 2026-09-14
 
 ### Security
