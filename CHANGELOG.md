@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows semantic versioning for plugin releases.
 
+## [2.11.4] - 2026-10-22
+
+### Fixed
+
+- **The admin surface's CSP is now sent** (#446). `Header_Builder` emits from `send_headers`, `login_init` and `wp_redirect`. WordPress fires `send_headers` only from `WP::main()`, which wp-admin never runs, so ordinary wp-admin pages never received the admin policy. `Policy_Builder` now also hooks `admin_init` (priority 1), skipping admin-ajax. This covers CSP only: the other header pillars still skip wp-admin, since X-Frame-Options or COOP/COEP there can break admin features.
+- **Schema v47 holds an enforcing admin CSP profile at report-only, once** (#446). Those sites had been running with no admin policy at all, and would otherwise have started enforcing a never-tested one on the dashboard. The migration is guarded by `wp_sam_admin_csp_held_v47` and logs a warning notice.
+- **`csp_enforce_ready` now needs evidence the policy was delivered** (#446). The recommendation had fired on staging and production for the admin surface, reading 30 days without reports as a clean run of a policy that was never sent. New `Csp_Delivery_Log` keeps one autoloaded `wp_sam_csp_delivery_{surface}` option per surface, with writes throttled hourly. It records when a policy was first and last sent (a gap over 7 days restarts the clock) and when its hashes were last trimmed to fit the byte budget. The rule now also requires 30 days of continuous delivery, a send in the last 7 days, and no trimming in the window.
+- **`pillar_enforce_ready` skips the admin and api surfaces** (#446), where pillar headers are never delivered.
+
+### Changed
+
+- **The learned api CSP is retired in favour of a fixed REST header** (#446). REST requests are served during `parse_request`, before `send_headers`, so the api policy never applied, and a JSON response can't produce a violation. `Policy_Builder` no longer emits it. New `Rest_Csp_Header` adds `default-src 'none'; frame-ancestors 'none'` to JSON REST responses unless the endpoint set its own CSP or a non-JSON `Content-Type`. It's filterable via `wp_sam_rest_csp_header`.
+- **The api surface is removed from CSP learning and the CSP screens** (#447). New `Csp_Surfaces::ALL` (frontend, admin, login) is the single source of CSP's surfaces.
+  - Discovery no longer crawls `rest_url()`. That crawl is where a high-risk "Proposed api form-action alltimetech.co.uk" came from, after staging redirected it to production.
+  - `Policy_Change_Manager::propose_source()` rejects non-CSP surfaces.
+  - The CSP dashboard, its handlers and the CSP rows in the Readiness Checker, Action Centre, Overview, Protection Status and Security Health show only CSP surfaces.
+  - Non-CSP controls and stored data keep `api`.
+
 ## [2.11.3] - 2026-10-21
 
 ### Fixed
