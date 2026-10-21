@@ -27,6 +27,7 @@ declare( strict_types=1 );
 
 namespace WP_SAM\CSP;
 
+use WP_SAM\Intelligence\Same_Host_Fetcher;
 use WP_SAM\Modules\Audit_Log;
 use WP_SAM\Modules\Feature_Gate;
 
@@ -77,9 +78,15 @@ class Discovery {
 
 	/**
 	 * Discovers sources from a single URL and stores them.
+	 *
+	 * Uses Same_Host_Fetcher so a redirect to another host (e.g. a staging
+	 * site sending unrecognised IPs to production) is reported rather than
+	 * silently crawled as if it were this site. A 401/403 is logged at info
+	 * only: it is almost always a firewall or login protection refusing an
+	 * anonymous request, not something wrong with this plugin or the site.
 	 */
 	public function crawl_url( string $url, string $surface ): array {
-		$response = wp_remote_get(
+		$response = ( new Same_Host_Fetcher() )->get(
 			$url,
 			array(
 				'timeout'    => 20,
@@ -87,6 +94,17 @@ class Discovery {
 				'sslverify'  => true,
 			)
 		);
+
+		if ( is_wp_error( $response ) && 'wp_sam_offsite_redirect' === $response->get_error_code() ) {
+			$data = (array) $response->get_error_data();
+			$host = (string) ( $data['host'] ?? '' );
+			$code = (int) ( $data['code'] ?? 0 );
+			$this->audit->log( 'discovery', 'crawl_redirected_offsite', "{$url} redirected to another host ({$host}, HTTP {$code}), so this page was not crawled.", 'warning' );
+			return array(
+				'added'   => 0,
+				'updated' => 0,
+			);
+		}
 
 		if ( is_wp_error( $response ) ) {
 			$this->audit->log( 'discovery', 'crawl_failed', "Failed to fetch {$url}: " . $response->get_error_message(), 'warning' );
@@ -97,6 +115,13 @@ class Discovery {
 		}
 
 		$code = (int) wp_remote_retrieve_response_code( $response );
+		if ( 401 === $code || 403 === $code ) {
+			$this->audit->log( 'discovery', 'crawl_blocked', "HTTP {$code} for {$url}: the request was refused, likely by a firewall or login protection, so this page was not crawled.", 'info' );
+			return array(
+				'added'   => 0,
+				'updated' => 0,
+			);
+		}
 		if ( $code < 200 || $code >= 400 ) {
 			$this->audit->log( 'discovery', 'crawl_http_error', "HTTP {$code} for {$url}.", 'warning' );
 			return array(
