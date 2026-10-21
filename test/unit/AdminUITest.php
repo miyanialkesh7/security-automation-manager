@@ -697,6 +697,7 @@ class AdminUITest extends TestCase {
 		// "source_file/source_context") reached ordinary site owners
 		// verbatim in a wp-admin banner. A known event must show a plain-
 		// English summary as the primary text instead.
+		$GLOBALS['_wp_current_user_can']['manage_options'] = true;
 		update_option(
 			'wp_sam_admin_notices',
 			array(
@@ -721,6 +722,7 @@ class AdminUITest extends TestCase {
 	}
 
 	public function test_display_admin_notices_keeps_the_technical_detail_available_but_collapsed(): void {
+		$GLOBALS['_wp_current_user_can']['manage_options'] = true;
 		update_option(
 			'wp_sam_admin_notices',
 			array(
@@ -747,6 +749,7 @@ class AdminUITest extends TestCase {
 		// Only events actually found to need simplification are listed in
 		// ADMIN_NOTICE_SUMMARIES -- anything else keeps today's behaviour
 		// rather than silently losing detail because it wasn't added yet.
+		$GLOBALS['_wp_current_user_can']['manage_options'] = true;
 		update_option(
 			'wp_sam_admin_notices',
 			array(
@@ -768,6 +771,30 @@ class AdminUITest extends TestCase {
 		$this->assertStringContainsString( 'discovery/crawl_failed', $output );
 		$this->assertStringContainsString( 'Failed to fetch', $output );
 		$this->assertStringNotContainsString( '<details>', $output );
+	}
+
+	public function test_display_admin_notices_neither_shows_nor_clears_the_queue_for_a_user_without_manage_options(): void {
+		// admin_notices fires on every wp-admin screen, including a
+		// subscriber's own profile.php -- the once-only queue must not be
+		// shown to, or drained by, someone who cannot open SAM's pages.
+		$notices = array(
+			array(
+				'component' => 'discovery',
+				'event'     => 'crawl_failed',
+				'detail'    => 'Failed to fetch https://example.com/: some error',
+				'severity'  => 'warning',
+			),
+		);
+		update_option( 'wp_sam_admin_notices', $notices );
+
+		$ui = $this->make_admin_ui();
+
+		ob_start();
+		$ui->display_admin_notices();
+		$output = (string) ob_get_clean();
+
+		$this->assertSame( '', $output );
+		$this->assertSame( $notices, get_option( 'wp_sam_admin_notices' ) );
 	}
 
 	/**
