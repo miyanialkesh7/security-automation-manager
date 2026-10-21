@@ -623,8 +623,16 @@ if ( ! function_exists( 'home_url' ) ) {
 }
 
 if ( ! function_exists( 'get_home_url' ) ) {
-	function get_home_url( int $blog_id = 0, string $path = '', string $scheme = '' ): string {
+	// $blog_id is untyped, as in core -- Discovery::get_crawl_urls() calls
+	// get_home_url( '/' ), which core accepts on a single site.
+	function get_home_url( $blog_id = null, string $path = '', string $scheme = '' ): string {
 		return home_url( $path, $scheme );
+	}
+}
+
+if ( ! function_exists( 'wp_login_url' ) ) {
+	function wp_login_url( string $redirect = '', bool $force_reauth = false ): string {
+		return 'https://example.com/wp-login.php';
 	}
 }
 

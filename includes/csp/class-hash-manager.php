@@ -479,7 +479,7 @@ class Hash_Manager {
 	 * @param string $content     Raw inline script/style content, or a style
 	 *                            attribute's value for 'style-src-attr'.
 	 * @param string $directive   'script-src', 'style-src', or 'style-src-attr'.
-	 * @param string $surface     'frontend' | 'admin' | 'login' | 'api'.
+	 * @param string $surface     'frontend' | 'admin' | 'login' (Csp_Surfaces::ALL).
 	 * @param string $source_file Optional: file where the inline block originates.
 	 * @return string             'sha256-{base64}' value for direct use in CSP header.
 	 */

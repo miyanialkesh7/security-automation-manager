@@ -348,6 +348,24 @@ class ViolationReporterTest extends TestCase {
 		$this->assertSame( 'report-endpoint', $source_insert['owner_component'] );
 	}
 
+	public function test_report_endpoint_learning_never_proposes_a_source_for_a_rest_api_document(): void {
+		// The REST API isn't a CSP surface (Csp_Surfaces), so a report whose
+		// document-uri is under /wp-json -- which maps to 'api' -- never feeds
+		// the For Review queue, even with the learning window open.
+		update_option( Learning_Window::OPTION_LAST_CHANGE, gmdate( 'Y-m-d H:i:s' ) );
+		update_option( Learning_Window::OPTION_WINDOW_HOURS, 48 );
+		$GLOBALS['_wp_rest_headers']['content-type'] = 'application/csp-report';
+
+		$reporter = new Violation_Reporter( $this->audit, new Learning_Window() );
+		$request  = $this->make_request(
+			'{"csp-report":{"effective-directive":"form-action","violated-directive":"form-action","document-uri":"https://example.com/wp-json/","blocked-uri":"https://forms.vendor.example/submit"}}'
+		);
+
+		$reporter->handle( $request );
+
+		$this->assertCount( 0, $GLOBALS['_wpdb_inserted_rows'] );
+	}
+
 	public function test_report_endpoint_learning_is_locked_after_window_expires(): void {
 		update_option( Learning_Window::OPTION_LAST_CHANGE, gmdate( 'Y-m-d H:i:s', time() - ( 49 * HOUR_IN_SECONDS ) ) );
 		update_option( Learning_Window::OPTION_WINDOW_HOURS, 48 );
