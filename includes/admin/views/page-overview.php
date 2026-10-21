@@ -29,6 +29,7 @@ use WP_SAM\Admin\Security_Scorecard;
 use WP_SAM\Admin\Status_Badge;
 use WP_SAM\Certificates\Certificate_Store;
 use WP_SAM\CSP\Automation_Config;
+use WP_SAM\CSP\Csp_Surfaces;
 use WP_SAM\Intelligence\Baseline_Store;
 use WP_SAM\Intelligence\Detector_Registry;
 use WP_SAM\Intelligence\Recommendation_Engine;
@@ -150,7 +151,11 @@ if ( 'overview' === $tab ) {
 		$wp_sam_home_section_order = array( 'action', 'activity', 'protection' );
 	}
 
-	$surfaces = Automation_Config::SURFACES;
+	// Every site surface, for the non-CSP pillar rows below -- they still
+	// apply to the REST API. CSP's own rows use $csp_surfaces instead, which
+	// leaves 'api' out (see Csp_Surfaces).
+	$surfaces     = array( 'frontend', 'admin', 'login', 'api' );
+	$csp_surfaces = Csp_Surfaces::ALL;
 
 	// phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	$profiles_raw     = $wpdb->get_results( "SELECT surface, mode FROM {$wpdb->prefix}csp_policy_profiles ORDER BY surface", ARRAY_A );
@@ -223,9 +228,12 @@ if ( 'overview' === $tab ) {
 // above; there is no dismiss/hide state to persist, so the checklist simply
 // reflects live configuration on every page load.
 if ( 'getting-started' === $tab ) {
+	// CSP's own surfaces only -- an older install's 'api' profile row
+	// doesn't count (see Csp_Surfaces).
 	// phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	$gs_csp_active_count = (int) $wpdb->get_var(
-		"SELECT COUNT(*) FROM {$wpdb->prefix}csp_policy_profiles WHERE mode != 'disabled'"
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Csp_Surfaces::sql_list() is a hard-coded constant list, not input.
+		"SELECT COUNT(*) FROM {$wpdb->prefix}csp_policy_profiles WHERE mode != 'disabled' AND surface IN (" . Csp_Surfaces::sql_list() . ')'
 	);
 
 	$gs_pillar_rows   = Pillar_Registry::fetch_rows();
@@ -398,7 +406,7 @@ $rollback_snapshots = Rollback_Guard::list_snapshots();
 			<tr>
 				<td class="wp-sam-col-primary"><strong><?php esc_html_e( 'CSP Deterministic Automation', 'vcns-security-automation-manager' ); ?></strong></td>
 				<td class="wp-sam-col-status">
-					<?php foreach ( $surfaces as $surface ) : ?>
+					<?php foreach ( $csp_surfaces as $surface ) : ?>
 						<?php $automation_mode = $automation_config->for_surface( $surface )['mode']; ?>
 						<?php echo Status_Badge::render_automation( ucfirst( $surface ) . ': ' . Automation_Config::mode_label( $automation_mode ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Status_Badge::render_automation() returns pre-escaped HTML. ?>
 					<?php endforeach; ?>
@@ -481,7 +489,7 @@ $rollback_snapshots = Rollback_Guard::list_snapshots();
 					<strong><?php esc_html_e( 'Content Security Policy', 'vcns-security-automation-manager' ); ?></strong>
 				</td>
 				<td class="wp-sam-col-status">
-					<?php foreach ( $surfaces as $surface ) : ?>
+					<?php foreach ( $csp_surfaces as $surface ) : ?>
 						<?php $mode = $modes_by_surface[ $surface ] ?? 'disabled'; ?>
 						<?php $state = $csp_status_by_mode[ $mode ] ?? Status_Badge::STATE_DISABLED; ?>
 						<?php echo Status_Badge::render( $state, ucfirst( $surface ) . ': ' . ( $csp_status_labels[ $state ] ?? $mode ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Status_Badge::render() returns pre-escaped HTML. ?>

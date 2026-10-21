@@ -65,6 +65,7 @@ use WP_SAM\Rollback_Guard;
 use WP_SAM\CSP\Automation_Config;
 use WP_SAM\CSP\Automation_Mode_Registry;
 use WP_SAM\CSP\Conflict_Detector;
+use WP_SAM\CSP\Csp_Surfaces;
 use WP_SAM\CSP\Policy_Builder;
 use WP_SAM\CSP\Policy_Change_Manager;
 use WP_SAM\CSP\Policy_Version_Manager;
@@ -2698,7 +2699,7 @@ class Admin_UI {
 		$surface = sanitize_text_field( wp_unslash( $_POST['surface'] ?? '' ) );
 		$mode    = sanitize_text_field( wp_unslash( $_POST['mode'] ?? '' ) );
 
-		if ( ! in_array( $surface, array( 'frontend', 'admin', 'login', 'api' ), true ) ) {
+		if ( ! in_array( $surface, Csp_Surfaces::ALL, true ) ) {
 			wp_send_json_error( array( 'message' => 'Invalid surface.' ) );
 		}
 		if ( ! in_array( $mode, array( 'report-only', 'enforce', 'disabled' ), true ) ) {
@@ -2749,7 +2750,7 @@ class Admin_UI {
 		$surface = sanitize_text_field( wp_unslash( $_POST['surface'] ?? '' ) );
 		$enabled = ! empty( $_POST['enabled'] );
 
-		if ( ! in_array( $surface, array( 'frontend', 'admin', 'login', 'api' ), true ) ) {
+		if ( ! in_array( $surface, Csp_Surfaces::ALL, true ) ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid surface.', 'vcns-security-automation-manager' ) ) );
 		}
 
@@ -2786,7 +2787,7 @@ class Admin_UI {
 		$flag    = sanitize_key( wp_unslash( $_POST['flag'] ?? '' ) );
 		$enabled = ! empty( $_POST['enabled'] );
 
-		if ( ! in_array( $surface, array( 'frontend', 'admin', 'login', 'api' ), true ) ) {
+		if ( ! in_array( $surface, Csp_Surfaces::ALL, true ) ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid surface.', 'vcns-security-automation-manager' ) ) );
 		}
 
@@ -2832,7 +2833,7 @@ class Admin_UI {
 		$surface = sanitize_text_field( wp_unslash( $_POST['surface'] ?? '' ) );
 		$mode    = sanitize_text_field( wp_unslash( $_POST['mode'] ?? '' ) );
 
-		if ( ! in_array( $surface, Automation_Config::SURFACES, true ) ) {
+		if ( ! in_array( $surface, Csp_Surfaces::ALL, true ) ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid surface.', 'vcns-security-automation-manager' ) ) );
 		}
 

@@ -22,6 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use WP_SAM\CSP\Csp_Surfaces;
 use WP_SAM\Intelligence\Recommendation_Engine;
 
 class Action_Centre {
@@ -146,14 +147,15 @@ class Action_Centre {
 		return '';
 	}
 
+	/** CSP's own surfaces only, matching what For Review lists -- an older install's 'api' rows are never counted (see Csp_Surfaces). */
 	private function pending_csp_source_count(): int {
 		global $wpdb;
 		$table = $wpdb->prefix . 'csp_source_inventory';
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		return (int) $wpdb->get_var(
 			$wpdb->prepare(
-				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-				"SELECT COUNT(*) FROM {$table} WHERE approval_state = %s",
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared -- Csp_Surfaces::sql_list() is a hard-coded constant list, not input.
+				"SELECT COUNT(*) FROM {$table} WHERE approval_state = %s AND surface IN (" . Csp_Surfaces::sql_list() . ')',
 				'pending'
 			)
 		);

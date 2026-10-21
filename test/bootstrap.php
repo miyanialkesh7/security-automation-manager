@@ -1129,6 +1129,38 @@ if ( ! function_exists( 'current_user_can' ) ) {
 	}
 }
 
+// ── AJAX response stubs ───────────────────────────────────────────────────────
+// Core's wp_send_json_*() print JSON and die; these throw instead, so a test
+// can call an Admin_UI AJAX handler directly, catch the response, and know
+// nothing after it ran. check_ajax_referer() always passes -- nonce checks
+// are covered separately (NonceManagerTest) and aren't what these tests are
+// about.
+if ( ! class_exists( 'WP_SAM_Test_Json_Response' ) ) {
+	class WP_SAM_Test_Json_Response extends RuntimeException {
+		public function __construct( public readonly bool $success, public readonly mixed $data = null, public readonly ?int $status_code = null ) {
+			parent::__construct( $success ? 'wp_send_json_success' : 'wp_send_json_error' );
+		}
+	}
+}
+
+if ( ! function_exists( 'check_ajax_referer' ) ) {
+	function check_ajax_referer( $action = -1, $query_arg = false, $stop = true ): int {
+		return 1;
+	}
+}
+
+if ( ! function_exists( 'wp_send_json_error' ) ) {
+	function wp_send_json_error( mixed $value = null, ?int $status_code = null, int $flags = 0 ): never {
+		throw new WP_SAM_Test_Json_Response( false, $value, $status_code );
+	}
+}
+
+if ( ! function_exists( 'wp_send_json_success' ) ) {
+	function wp_send_json_success( mixed $value = null, ?int $status_code = null, int $flags = 0 ): never {
+		throw new WP_SAM_Test_Json_Response( true, $value, $status_code );
+	}
+}
+
 // ── Global state reset helper ─────────────────────────────────────────────────
 // Call this in setUp() to start each test with a clean slate.
 function wp_test_reset_globals(): void {
