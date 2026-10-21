@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows semantic versioning for plugin releases.
 
+## [2.11.2] - 2026-10-21
+
+### Fixed
+
+- No functional change from 2.11.1. Public docs disagreed on how many security-header pillars the plugin has ("ten" in `docs/index.html`, "twelve" in `docs/user-guide.html`, "seven more" in `readme.txt`), because Information Masking and Cache-Control were added as pillars without updating every list that enumerated or counted them. `README.md`, `readme.txt`, `SPECIFICATION.md`, `docs/index.html`, `docs/user-guide.html`, `docs/architecture.md`, `docs/rollback-and-recovery.md`, `docs/images/README.md` and the `Config_Portability` docblock now consistently say twelve (CSP plus eleven), with both missing pillars listed. `docs/architecture.md` also no longer claims none of the eleven has a report-only mode: COOP and COEP do (#429).
+- CI only: the `Secret Scan` job in `ci.yml` checks out the pull request head by SHA instead of by branch name, so it no longer fails at checkout on pull requests opened from a fork. Pushes to `development`/`main` behave as before (#439).
+
 ## [2.11.1] - 2026-09-17
 
 ### Fixed
