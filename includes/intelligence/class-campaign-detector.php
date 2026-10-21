@@ -76,14 +76,37 @@ final class Campaign_Detector {
 	}
 
 	/**
-	 * Explicit, admin-triggered response: adds every currently-live
-	 * participant IP as a permanent sam_ip_rules block (all surfaces), then
-	 * marks the campaign 'blocked'. Re-queries live participants at call
-	 * time rather than trusting the campaign row's own (possibly stale)
-	 * participant_count.
+	 * The live participant IPs a campaign block would actually act on:
+	 * never the acting administrator's own IP, nor a loopback address. An
+	 * explicit sam_ip_rules block applies even to a logged-in admin, so
+	 * without this, an admin whose own IP had tripped the same detector
+	 * (e.g. while testing) would lock themselves out of every surface,
+	 * wp-admin included.
+	 *
+	 * @param array<int, string> $ips
+	 * @return array<int, string>
 	 */
-	public function block_participants( array $campaign, int $admin_id, string $note, Ip_Rule_Store $ip_rules, int $window_hours = self::DEFAULT_WINDOW_HOURS ): int {
-		$ips = $this->events->distinct_ips( (string) $campaign['detector_id'], (string) $campaign['surface'], $window_hours );
+	public static function blockable_ips( array $ips, string $actor_ip ): array {
+		return array_values(
+			array_filter(
+				$ips,
+				static fn( string $ip ): bool => $ip !== $actor_ip && ! Cidr_Matcher::ip_in_any_cidr( $ip, Cidr_Matcher::LOOPBACK_CIDRS )
+			)
+		);
+	}
+
+	/**
+	 * Explicit, admin-triggered response: adds every currently-live
+	 * participant IP (except those blockable_ips() excludes) as a permanent
+	 * sam_ip_rules block (all surfaces), then marks the campaign 'blocked'.
+	 * Re-queries live participants at call time rather than trusting the
+	 * campaign row's own (possibly stale) participant_count.
+	 */
+	public function block_participants( array $campaign, int $admin_id, string $note, Ip_Rule_Store $ip_rules, int $window_hours = self::DEFAULT_WINDOW_HOURS, string $actor_ip = '' ): int {
+		$ips = self::blockable_ips(
+			$this->events->distinct_ips( (string) $campaign['detector_id'], (string) $campaign['surface'], $window_hours ),
+			$actor_ip
+		);
 
 		$blocked = 0;
 		foreach ( $ips as $ip ) {

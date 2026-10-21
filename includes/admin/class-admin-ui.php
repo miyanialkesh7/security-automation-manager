@@ -1644,7 +1644,9 @@ class Admin_UI {
 				$campaign,
 				get_current_user_id(),
 				$note,
-				new Ip_Rule_Store()
+				new Ip_Rule_Store(),
+				Campaign_Detector::DEFAULT_WINDOW_HOURS,
+				Ip_Resolver::resolve()
 			);
 		}
 
