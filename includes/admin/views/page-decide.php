@@ -18,10 +18,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 global $wpdb;
 
 // Same shape as the per-surface pending-count query already used on the CSP
-// dashboard's own banner (page-csp-dashboard.php), just without the surface
-// filter -- a plugin-wide total, not new aggregation logic.
-// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-$pending_sources = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}csp_source_inventory WHERE approval_state = 'pending'" );
+// dashboard's own banner (page-csp-dashboard.php), summed across every CSP
+// surface (Csp_Surfaces) so it matches what For Review lists -- a plugin-wide
+// total, not new aggregation logic.
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Csp_Surfaces::sql_list() is a hard-coded constant list, not input.
+$pending_sources = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}csp_source_inventory WHERE approval_state = 'pending' AND surface IN (" . \WP_SAM\CSP\Csp_Surfaces::sql_list() . ')' );
 
 // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 $active_exceptions = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}sam_exceptions WHERE review_status = 'active'" );

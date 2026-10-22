@@ -14,6 +14,7 @@ namespace WP_SAM;
 
 use WP_SAM\CSP\Automation_Config;
 use WP_SAM\CSP\Violation_Reporter;
+use WP_SAM\Modules\Audit_Log;
 use WP_SAM\Security\Cache_Control_Builder;
 use WP_SAM\Security\Cross_Origin_Embedder_Policy_Builder;
 use WP_SAM\Security\Cross_Origin_Opener_Policy_Builder;
@@ -40,6 +41,7 @@ class Activator {
 		self::migrate_loosen_media_src_default();
 		self::migrate_consolidate_bypass_flags_into_json();
 		self::migrate_default_reporting_transport_to_both();
+		self::migrate_hold_admin_csp_at_report_only();
 
 		// Generic, empty-by-default extension point: an extension (see
 		// includes/extensions/, physically absent from the WordPress.org-
@@ -181,6 +183,50 @@ class Activator {
 	 * bump calling activate() again. Guarded by its own one-time completion
 	 * marker instead.
 	 */
+	/**
+	 * Schema v47: Policy_Builder now sends the admin surface's policy (it
+	 * hooks admin_init; WordPress never fires send_headers on wp-admin
+	 * pages, so until now no admin policy was ever sent). A site whose
+	 * admin profile was already set to enforce has therefore been running
+	 * with no admin policy at all, and would start enforcing a never-tested
+	 * one on its dashboard the moment it updated. Hold any such profile at
+	 * report-only, once, so its real reports can be reviewed before an
+	 * administrator promotes it again. Flag-guarded, so a deliberate
+	 * re-promotion afterwards is never undone.
+	 */
+	private static function migrate_hold_admin_csp_at_report_only(): void {
+		if ( get_option( 'wp_sam_admin_csp_held_v47', false ) ) {
+			return;
+		}
+		update_option( 'wp_sam_admin_csp_held_v47', true );
+
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$held = $wpdb->update(
+			$wpdb->prefix . 'csp_policy_profiles',
+			array(
+				'mode'       => 'report-only',
+				'updated_at' => current_time( 'mysql', true ),
+			),
+			array(
+				'surface' => 'admin',
+				'mode'    => 'enforce',
+			),
+			array( '%s', '%s' ),
+			array( '%s', '%s' )
+		);
+
+		if ( ! empty( $held ) ) {
+			( new Audit_Log() )->log(
+				'policy_change',
+				'admin_csp_held_report_only',
+				'The admin surface\'s Content Security Policy was switched from Enforce to Report-only. Earlier versions never actually sent the admin policy, so it has never been tested on your dashboard. Review its reports on the CSP Violations tab, then promote it again once they are clean.',
+				'warning'
+			);
+		}
+	}
+
 	private static function migrate_default_reporting_transport_to_both(): void {
 		if ( get_option( 'wp_sam_reporting_transport_defaulted_v39', false ) ) {
 			return;

@@ -14,6 +14,7 @@ use WP_SAM\Admin\Table_Query;
 use WP_SAM\Admin\Policy_Events_Builder;
 use WP_SAM\Admin\Risk_Badge;
 use WP_SAM\Admin\Known_Source_Badge;
+use WP_SAM\CSP\Csp_Surfaces;
 
 global $wpdb;
 
@@ -68,9 +69,16 @@ $profiles = array();
 if ( in_array( $tab, array( 'profiles', 'policy-audit' ), true ) ) {
 	// phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 	$profiles_raw = $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}csp_policy_profiles ORDER BY surface", ARRAY_A );
-	$profiles     = ! empty( $profiles_raw ) ? $profiles_raw : array();
+	// An older install still has an 'api' profile row; it's left in the
+	// table but never shown, since 'api' isn't a CSP surface (Csp_Surfaces).
+	$profiles = array_values(
+		array_filter(
+			! empty( $profiles_raw ) ? $profiles_raw : array(),
+			static fn( array $profile ): bool => in_array( (string) ( $profile['surface'] ?? '' ), Csp_Surfaces::ALL, true )
+		)
+	);
 }
-$surfaces          = array( 'frontend', 'admin', 'login', 'api' );
+$surfaces          = Csp_Surfaces::ALL;
 $automation_config = ( new \WP_SAM\CSP\Automation_Config() )->all();
 $automation_labels = \WP_SAM\CSP\Automation_Config::mode_labels();
 
@@ -188,7 +196,7 @@ $conflict_notices     = ! empty( $conflict_notices_raw ) ? $conflict_notices_raw
 	<!-- ── Start Here tab ─────────────────────────────────────────────────── -->
 	<h2 class="title"><?php esc_html_e( 'What this plugin does', 'vcns-security-automation-manager' ); ?></h2>
 	<p class="description">
-		<?php esc_html_e( 'This plugin builds a Content-Security-Policy (CSP) for your site by watching what your site actually loads - scripts, styles, images, fonts, connections, and frames - and letting you decide which of those sources belong in the policy. It manages this separately for four surfaces: the public frontend, wp-admin, the login screen, and the REST API.', 'vcns-security-automation-manager' ); ?>
+		<?php esc_html_e( 'This plugin builds a Content-Security-Policy (CSP) for your site by watching what your site actually loads - scripts, styles, images, fonts, connections, and frames - and letting you decide which of those sources belong in the policy. It manages this separately for three surfaces: the public frontend, wp-admin, and the login screen.', 'vcns-security-automation-manager' ); ?>
 	</p>
 	<p class="description">
 		<?php esc_html_e( 'Nothing is blocked or enforced until you deliberately turn it on. The whole workflow below is designed so you can see exactly what a policy would do before it does it.', 'vcns-security-automation-manager' ); ?>
@@ -427,6 +435,9 @@ $conflict_notices     = ! empty( $conflict_notices_raw ) ? $conflict_notices_raw
 		$src_args  = array();
 		foreach (
 			array(
+				// CSP's own surfaces only -- older 'api' rows stay in the table
+				// but are never listed (see Csp_Surfaces).
+				Table_Query::multi_select_where( 'surface', Csp_Surfaces::ALL ),
 				Table_Query::equals_where( 'surface', $src_surface ),
 				Table_Query::multi_select_where( 'approval_state', $src_state ),
 				Table_Query::multi_select_where( 'risk_level', $src_risk ),
@@ -1052,6 +1063,7 @@ $conflict_notices     = ! empty( $conflict_notices_raw ) ? $conflict_notices_raw
 		$viol_args  = array();
 		foreach (
 			array(
+				Table_Query::multi_select_where( 'profile_surface', Csp_Surfaces::ALL ),
 				Table_Query::equals_where( 'profile_surface', $v_surface ),
 				Table_Query::like_where( $wpdb, 'violated_directive', $v_directive ),
 				Table_Query::like_where_any( $wpdb, array( 'blocked_host', 'blocked_uri' ), $v_blocked ),

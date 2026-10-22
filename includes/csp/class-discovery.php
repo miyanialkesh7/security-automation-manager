@@ -20,7 +20,10 @@
  *   - media-src is discoverable from <audio> and <video> src attributes.
  *   - manifest-src is discoverable from <link rel="manifest"> href.
  *
- * Multi-surface crawl covers frontend, admin, login, and REST API URLs.
+ * Multi-surface crawl covers CSP's own surfaces (Csp_Surfaces::ALL) -- in
+ * practice the frontend and login URLs, since admin has no anonymous crawl
+ * target. The REST API is not crawled: it isn't a CSP surface, and a JSON
+ * response has no subresources to discover anyway.
  */
 
 declare( strict_types=1 );
@@ -61,7 +64,7 @@ class Discovery {
 		$surfaces = array( 'frontend' );
 
 		if ( $this->gate->is_allowed( 'multi_surface_scan' ) ) {
-			$surfaces = array( 'frontend', 'admin', 'login', 'api' );
+			$surfaces = Csp_Surfaces::ALL;
 		}
 
 		foreach ( $surfaces as $surface ) {
@@ -433,7 +436,6 @@ class Discovery {
 			// connect-src/worker-src.
 			'admin'    => array(),
 			'login'    => array( wp_login_url() ),
-			'api'      => array( rest_url() ),
 			default    => array(),
 		};
 	}

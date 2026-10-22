@@ -4,7 +4,7 @@ Tags: security, csp, content security policy, hsts, ssl certificates
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 2.11.3
+Stable tag: 2.11.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,12 @@ The remaining three DNS-01 drivers (acme-dns, PowerDNS, and RFC 2136 dynamic DNS
 When an administrator configures automatic cPanel deployment, once a certificate is successfully issued the plugin sends an HTTPS request to the cPanel host the administrator specifies (cPanel's UAPI SSL::install_ssl endpoint), containing: the cPanel account username and API token supplied by the administrator (as an Authorization header); the domain name; the issued certificate; the certificate chain; and the certificate's private key. This is the one automatic-deployment method that transmits the private key itself, since installing a certificate requires it. Nothing is sent unless cPanel deployment is explicitly configured, and it happens once per issuance or renewal, immediately after the certificate is issued. Because the endpoint is the administrator's own hosting provider, not a service this plugin operates or has a relationship with, no single Terms of Service or Privacy Policy governs it -- those are whatever the administrator's own hosting provider publishes for their account and API access.
 
 == Changelog ==
+
+= 2.11.4 =
+
+* Fixed: the Content Security Policy for your WordPress dashboard (the admin surface) is now actually sent. Earlier versions never delivered it on ordinary dashboard pages, so "no violations reported" there meant nothing. If your admin policy was set to Enforce, it has been moved back to Report-only once, so you can review its real reports before promoting it again.
+* Fixed: "Promote this surface to Enforce" is now only suggested when the plugin has evidence that the policy was actually being sent for the whole 30 days, and wasn't having to drop learned approvals to stay within its size limit. Expect no such suggestions for the first 30 days after updating while that evidence builds up.
+* Changed: the REST API is no longer treated as a Content Security Policy surface you review and promote. API responses (JSON) never load scripts, styles or images, so there was nothing to learn there; they now get a fixed, locked-down policy instead, and the API surface no longer appears on the CSP screens.
 
 = 2.11.3 =
 

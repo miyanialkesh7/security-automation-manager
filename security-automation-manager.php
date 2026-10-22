@@ -3,7 +3,7 @@
  * Plugin Name:       VCNS Security Automation Manager
  * Plugin URI:        https://github.com/vcns/security-automation-manager
  * Description:       Self-learning security headers, built-in attack detection and rate limiting, file-integrity monitoring, and free TLS certificates. No paywall.
- * Version:           2.11.3
+ * Version:           2.11.4
  * Requires at least: 6.4
  * Requires PHP:      8.1
  * Author:            VCNS Tech Ltd
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // ── Core constants ────────────────────────────────────────────────────────────
-define( 'WP_SAM_VERSION', '2.11.3' );
+define( 'WP_SAM_VERSION', '2.11.4' );
 
 /**
  * Schema version. Increment whenever a database schema change is made.
@@ -335,7 +335,7 @@ define( 'WP_SAM_VERSION', '2.11.3' );
  *        private/commercial build -- neither public release channel has
  *        ever shipped a working checkout path.
  */
-define( 'WP_SAM_DB_VERSION', '46' );
+define( 'WP_SAM_DB_VERSION', '47' );
 
 define( 'WP_SAM_FILE', __FILE__ );
 define( 'WP_SAM_DIR', plugin_dir_path( __FILE__ ) );

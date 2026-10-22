@@ -24,6 +24,7 @@ declare( strict_types=1 );
 namespace WP_SAM\Intelligence;
 
 use WP_SAM\CSP\Automation_Config;
+use WP_SAM\CSP\Csp_Surfaces;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -75,7 +76,10 @@ final class Security_Health {
 	private function enforcement_row(): array {
 		global $wpdb;
 
-		$surfaces = array( 'frontend', 'admin', 'login', 'api' );
+		// CSP's own surfaces -- an older install's 'api' profile row is
+		// ignored (see Csp_Surfaces). Traffic Controls, counted below, still
+		// cover all four surfaces.
+		$surfaces = Csp_Surfaces::ALL;
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$csp_rows  = $wpdb->get_results( "SELECT surface, mode FROM {$wpdb->prefix}csp_policy_profiles", ARRAY_A );
@@ -108,9 +112,10 @@ final class Security_Health {
 		}
 
 		$value = sprintf(
-			/* translators: 1: CSP surfaces enforcing, 2: traffic-control surfaces enforcing */
-			__( 'CSP enforcing on %1$d/4 surfaces, Traffic Controls on %2$d/4', 'vcns-security-automation-manager' ),
+			/* translators: 1: CSP surfaces enforcing, 2: number of CSP surfaces, 3: traffic-control surfaces enforcing */
+			__( 'CSP enforcing on %1$d/%2$d surfaces, Traffic Controls on %3$d/4', 'vcns-security-automation-manager' ),
 			$csp_enforcing,
+			count( $surfaces ),
 			$traffic_enforcing
 		);
 		if ( $exempted > 0 ) {

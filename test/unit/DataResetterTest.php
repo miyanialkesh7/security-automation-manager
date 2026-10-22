@@ -45,6 +45,8 @@ class DataResetterTest extends TestCase {
 		$GLOBALS['_wpdb_get_var']       = 'wp_csp_policy_profiles';
 		$GLOBALS['_wp_options']         = array(
 			'wp_sam_db_version'          => '7',
+			// Already-applied one-time migration: a reset must only touch the four profile rows.
+			'wp_sam_admin_csp_held_v47'  => true,
 			'wp_sam_report_endpoint_url' => 'https://public.example.com/wp-json/custom-endpoint/v1/report',
 		);
 		$GLOBALS['_wp_transients']      = array(

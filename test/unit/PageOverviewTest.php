@@ -156,6 +156,36 @@ class PageOverviewTest extends TestCase {
 		$this->assertStringContainsString( 'Nothing currently needs your attention.', $output );
 	}
 
+	public function test_overview_csp_rows_omit_the_api_surface_but_other_pillar_rows_keep_it(): void {
+		// Only CSP drops the REST API as a surface (Csp_Surfaces); every other
+		// pillar's per-surface badges still include it.
+		$GLOBALS['_wpdb_get_var']     = 0;
+		$GLOBALS['_wpdb_get_results'] = array();
+		$GLOBALS['_wpdb_get_row']     = null;
+		$GLOBALS['_wpdb_get_col']     = array();
+
+		$output = $this->render_tab( 'overview' );
+
+		foreach ( array( 'CSP Deterministic Automation', '<strong>Content Security Policy</strong>' ) as $csp_row_marker ) {
+			$csp_row = $this->table_row_starting_at( $output, $csp_row_marker );
+			$this->assertStringContainsString( 'Frontend:', $csp_row );
+			$this->assertStringContainsString( 'Login:', $csp_row );
+			$this->assertStringNotContainsString( 'Api:', $csp_row );
+		}
+
+		$csp_policy_at     = (int) strpos( $output, '<strong>Content Security Policy</strong>' );
+		$other_pillar_rows = substr( $output, (int) strpos( $output, '</tr>', $csp_policy_at ) );
+		$this->assertStringContainsString( 'Api:', $other_pillar_rows );
+	}
+
+	private function table_row_starting_at( string $html, string $marker ): string {
+		$start = strpos( $html, $marker );
+		$this->assertNotFalse( $start, "Marker not found: {$marker}" );
+		$end = strpos( $html, '</tr>', $start );
+		$this->assertNotFalse( $end );
+		return substr( $html, $start, $end - $start );
+	}
+
 	public function test_action_centre_tab_appears_in_nav_and_shows_empty_state_when_quiet(): void {
 		$GLOBALS['_wpdb_get_var']     = 0;
 		$GLOBALS['_wpdb_get_results'] = array();

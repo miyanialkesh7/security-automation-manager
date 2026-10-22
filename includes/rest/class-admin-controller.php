@@ -8,6 +8,7 @@ declare( strict_types=1 );
 namespace WP_SAM\Rest;
 
 use WP_SAM\CSP\Automation_Config;
+use WP_SAM\CSP\Csp_Surfaces;
 use WP_SAM\CSP\Policy_Version_Manager;
 use WP_SAM\Modules\Audit_Log;
 
@@ -127,8 +128,11 @@ class Admin_Controller {
 		$rows     = array();
 		foreach ( is_array( $profiles ) ? $profiles : array() as $profile ) {
 			$surface = (string) $profile['surface'];
-			$latest  = $this->policy_versions->latest_version( $surface );
-			$rows[]  = array(
+			if ( ! in_array( $surface, Csp_Surfaces::ALL, true ) ) {
+				continue; // An older install's 'api' row -- not a CSP surface (see Csp_Surfaces).
+			}
+			$latest = $this->policy_versions->latest_version( $surface );
+			$rows[] = array(
 				'surface'                    => $surface,
 				'mode'                       => (string) $profile['mode'],
 				'policy_version'             => isset( $latest['version_number'] ) ? (int) $latest['version_number'] : 0,
@@ -257,7 +261,7 @@ class Admin_Controller {
 		global $wpdb;
 
 		$table = $wpdb->prefix . 'csp_source_inventory';
-		$rows  = $wpdb->get_results( "SELECT * FROM {$table} WHERE approval_state = 'pending' ORDER BY FIELD(risk_level, 'critical', 'high', 'unknown', 'medium', 'low'), last_seen_at DESC LIMIT 100", ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows  = $wpdb->get_results( "SELECT * FROM {$table} WHERE approval_state = 'pending' AND surface IN (" . Csp_Surfaces::sql_list() . ") ORDER BY FIELD(risk_level, 'critical', 'high', 'unknown', 'medium', 'low'), last_seen_at DESC LIMIT 100", ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared -- Csp_Surfaces::sql_list() is a hard-coded constant list, not input.
 
 		return new \WP_REST_Response( array( 'pending' => is_array( $rows ) ? $rows : array() ) );
 	}

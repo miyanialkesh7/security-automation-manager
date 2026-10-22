@@ -16,7 +16,14 @@ class Automation_Config {
 	public const MODE_MANUAL                         = 'manual';
 	public const MODE_AUTOMATIC_MEDIUM_HIGH_APPROVAL = 'automatic_medium_high_approval';
 	public const MODE_AUTOMATIC_HIGH_APPROVAL        = 'automatic_high_approval';
-	public const SURFACES                            = array( 'frontend', 'admin', 'login', 'api' );
+
+	/**
+	 * CSP's own surfaces (see Csp_Surfaces for why 'api' isn't one). A
+	 * stored config that still carries an 'api' key from an older release
+	 * is simply ignored by all()/for_surface(), and drops out of the
+	 * option the next time the config is saved.
+	 */
+	public const SURFACES = Csp_Surfaces::ALL;
 
 	/**
 	 * mode defaults to automatic (high approvals only): every proposed CSP
