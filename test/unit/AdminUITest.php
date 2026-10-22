@@ -773,6 +773,73 @@ class AdminUITest extends TestCase {
 		$this->assertStringNotContainsString( '<details>', $output );
 	}
 
+	/**
+	 * @return array<string, array{0: string, 1: string, 2: string}>
+	 */
+	public static function notice_action_links(): array {
+		return array(
+			'SRI mismatch -> External Scripts'   => array( 'dependency_integrity_monitor', 'sri_mismatch', 'admin.php?page=security-automation-manager-scripts&tab=external' ),
+			'discovery -> Scan Log'              => array( 'discovery', 'crawl_http_error', 'admin.php?page=security-automation-manager-dashboard&tab=scan-log' ),
+			'conflict -> CSP dashboard'          => array( 'conflict_detector', 'csp_conflict', 'admin.php?page=security-automation-manager-dashboard&tab=start-here' ),
+			'hash budget -> Policy Audit'        => array( 'policy_builder', 'hash_budget_exceeded', 'admin.php?page=security-automation-manager-dashboard&tab=policy-audit' ),
+			'proposal -> For Review'             => array( 'policy_change', 'source_proposed', 'admin.php?page=security-automation-manager-dashboard&tab=sources' ),
+			'admin CSP held -> Profiles'         => array( 'policy_change', 'admin_csp_held_report_only', 'admin.php?page=security-automation-manager-dashboard&tab=profiles' ),
+			'certificate -> Certificates'        => array( 'certificates', 'cert_issue_failed', 'admin.php?page=security-automation-manager-certificates' ),
+			'import -> Recovery'                 => array( 'config_portability', 'config_imported', 'admin.php?page=security-automation-manager&tab=recovery#wp-sam-portability' ),
+			'rollback -> Recovery'               => array( 'rollback', 'snapshot_restored', 'admin.php?page=security-automation-manager&tab=recovery' ),
+			'security.txt -> Well-Known Files'   => array( 'scheduler', 'security_txt_refresh_failed', 'admin.php?page=security-automation-manager-traffic&tab=network-intelligence&subtab=well-known' ),
+			'app-ads.txt -> Well-Known Files'    => array( 'scheduler', 'app_ads_txt_refresh_failed', 'admin.php?page=security-automation-manager-traffic&tab=network-intelligence&subtab=well-known' ),
+			'Tor list -> Tor Exit List'          => array( 'scheduler', 'tor_exit_list_refresh_failed', 'admin.php?page=security-automation-manager-traffic&tab=network-intelligence&subtab=tor' ),
+			'scan exception -> Scan Log'         => array( 'scheduler', 'scan_exception', 'admin.php?page=security-automation-manager-dashboard&tab=scan-log' ),
+		);
+	}
+
+	/**
+	 * @dataProvider notice_action_links
+	 */
+	public function test_display_admin_notices_links_each_notice_to_where_it_can_be_acted_on( string $component, string $event, string $expected_path ): void {
+		$GLOBALS['_wp_current_user_can']['manage_options'] = true;
+		update_option(
+			'wp_sam_admin_notices',
+			array(
+				array(
+					'component' => $component,
+					'event'     => $event,
+					'detail'    => 'Something happened.',
+					'severity'  => 'warning',
+				),
+			)
+		);
+
+		ob_start();
+		$this->make_admin_ui()->display_admin_notices();
+		$output = (string) ob_get_clean();
+
+		$this->assertStringContainsString( 'href="https://example.com/wp-admin/' . $expected_path . '"', $output );
+	}
+
+	public function test_display_admin_notices_adds_no_link_for_an_unmapped_component(): void {
+		$GLOBALS['_wp_current_user_can']['manage_options'] = true;
+		update_option(
+			'wp_sam_admin_notices',
+			array(
+				array(
+					'component' => 'something_new',
+					'event'     => 'happened',
+					'detail'    => 'Something happened.',
+					'severity'  => 'warning',
+				),
+			)
+		);
+
+		ob_start();
+		$this->make_admin_ui()->display_admin_notices();
+		$output = (string) ob_get_clean();
+
+		$this->assertStringContainsString( 'something_new/happened', $output );
+		$this->assertStringNotContainsString( '<a ', $output );
+	}
+
 	public function test_display_admin_notices_neither_shows_nor_clears_the_queue_for_a_user_without_manage_options(): void {
 		// admin_notices fires on every wp-admin screen, including a
 		// subscriber's own profile.php -- the once-only queue must not be

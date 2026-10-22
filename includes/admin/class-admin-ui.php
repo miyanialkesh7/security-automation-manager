@@ -2480,28 +2480,128 @@ class Admin_UI {
 			$type    = 'error' === $notice['severity'] ? 'error' : 'warning';
 			$key     = $notice['component'] . '/' . $notice['event'];
 			$summary = self::ADMIN_NOTICE_SUMMARIES[ $key ] ?? null;
+			$action  = $this->admin_notice_action( (string) $notice['component'], (string) $notice['event'] );
+			$link    = null === $action
+				? ''
+				: sprintf( ' <a href="%1$s">%2$s</a>', esc_url( $action['url'] ), esc_html( $action['label'] ) );
 
 			if ( null === $summary ) {
 				printf(
-					'<div class="notice notice-%1$s is-dismissible"><p><strong>%2$s</strong> [%3$s] %4$s</p></div>',
+					'<div class="notice notice-%1$s is-dismissible"><p><strong>%2$s</strong> [%3$s] %4$s%5$s</p></div>',
 					esc_attr( $type ),
 					esc_html__( 'Security Automation Manager:', 'vcns-security-automation-manager' ),
 					esc_html( $key ),
-					esc_html( $notice['detail'] )
+					esc_html( $notice['detail'] ),
+					$link // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- URL and label escaped while building $link above.
 				);
 				continue;
 			}
 
 			printf(
-				'<div class="notice notice-%1$s is-dismissible"><p><strong>%2$s</strong> %3$s</p><details><summary>%4$s</summary><p class="description"><code>%5$s</code></p></details></div>',
+				'<div class="notice notice-%1$s is-dismissible"><p><strong>%2$s</strong> %3$s%6$s</p><details><summary>%4$s</summary><p class="description"><code>%5$s</code></p></details></div>',
 				esc_attr( $type ),
 				esc_html__( 'Security Automation Manager:', 'vcns-security-automation-manager' ),
 				esc_html( $summary ),
 				esc_html__( 'Technical detail (for a developer)', 'vcns-security-automation-manager' ),
-				esc_html( $key . ': ' . $notice['detail'] )
+				esc_html( $key . ': ' . $notice['detail'] ),
+				$link // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- URL and label escaped while building $link above.
 			);
 		}
 		delete_option( 'wp_sam_admin_notices' );
+	}
+
+	/**
+	 * The admin page (and tab) where a queued notice can be acted on, so
+	 * the notice links straight there instead of only naming the page in
+	 * its text. Covers every component that logs at warning/error severity
+	 * (the only severities Audit_Log queues as notices); returns null for
+	 * anything else.
+	 *
+	 * @return array{url: string, label: string}|null
+	 */
+	private function admin_notice_action( string $component, string $event ): ?array {
+		$csp     = static fn ( string $tab ): string => admin_url( 'admin.php?page=security-automation-manager-dashboard&tab=' . $tab );
+		$network = static fn ( string $subtab ): string => admin_url( 'admin.php?page=security-automation-manager-traffic&tab=network-intelligence&subtab=' . $subtab );
+
+		switch ( $component ) {
+			case 'dependency_integrity_monitor':
+				return array(
+					'url'   => admin_url( 'admin.php?page=security-automation-manager-scripts&tab=external' ),
+					'label' => __( 'Open Scripts → External', 'vcns-security-automation-manager' ),
+				);
+
+			case 'discovery':
+				return array(
+					'url'   => $csp( 'scan-log' ),
+					'label' => __( 'Open CSP → Scan Log', 'vcns-security-automation-manager' ),
+				);
+
+			case 'conflict_detector':
+				return array(
+					'url'   => $csp( 'start-here' ),
+					'label' => __( 'Open CSP', 'vcns-security-automation-manager' ),
+				);
+
+			case 'policy_builder':
+			case 'hash_manager':
+				return array(
+					'url'   => $csp( 'policy-audit' ),
+					'label' => __( 'Open CSP → Policy Audit', 'vcns-security-automation-manager' ),
+				);
+
+			case 'policy_change':
+				if ( 'admin_csp_held_report_only' === $event ) {
+					return array(
+						'url'   => $csp( 'profiles' ),
+						'label' => __( 'Open CSP → Profiles', 'vcns-security-automation-manager' ),
+					);
+				}
+				return array(
+					'url'   => $csp( 'sources' ),
+					'label' => __( 'Open CSP → For Review', 'vcns-security-automation-manager' ),
+				);
+
+			case 'certificates':
+				return array(
+					'url'   => admin_url( 'admin.php?page=security-automation-manager-certificates' ),
+					'label' => __( 'Open Certificates', 'vcns-security-automation-manager' ),
+				);
+
+			case 'config_portability':
+				return array(
+					'url'   => admin_url( 'admin.php?page=security-automation-manager&tab=recovery#wp-sam-portability' ),
+					'label' => __( 'Open Settings → Recovery', 'vcns-security-automation-manager' ),
+				);
+
+			case 'rollback':
+				return array(
+					'url'   => admin_url( 'admin.php?page=security-automation-manager&tab=recovery' ),
+					'label' => __( 'Open Settings → Recovery', 'vcns-security-automation-manager' ),
+				);
+
+			case 'scheduler':
+				if ( str_starts_with( $event, 'tor_exit_list_' ) ) {
+					return array(
+						'url'   => $network( 'tor' ),
+						'label' => __( 'Open Traffic Controls → Tor Exit List', 'vcns-security-automation-manager' ),
+					);
+				}
+				// The six well-known-file refreshes (robots_rules_, agents_rules_,
+				// security_txt_, humans_txt_, ads_txt_, app_ads_txt_).
+				if ( 1 === preg_match( '/^(robots_rules|agents_rules|security_txt|humans_txt|ads_txt|app_ads_txt)_/', $event ) ) {
+					return array(
+						'url'   => $network( 'well-known' ),
+						'label' => __( 'Open Traffic Controls → Well-Known Files', 'vcns-security-automation-manager' ),
+					);
+				}
+				// scan_exception / manual_scan_exception.
+				return array(
+					'url'   => $csp( 'scan-log' ),
+					'label' => __( 'Open CSP → Scan Log', 'vcns-security-automation-manager' ),
+				);
+		}
+
+		return null;
 	}
 
 	/**
