@@ -221,7 +221,7 @@ class Activator {
 			( new Audit_Log() )->log(
 				'policy_change',
 				'admin_csp_held_report_only',
-				'The admin surface\'s Content Security Policy was switched from Enforce to Report-only. Earlier versions never actually sent the admin policy, so it has never been tested on your dashboard. Review its reports on the CSP Violations tab, then promote it again once they are clean.',
+				'The admin surface\'s Content Security Policy was switched from Enforce to Report-only. Earlier versions never actually sent the admin policy, so it has never been tested on your dashboard. Review its reports under Observe → CSP Violations, then promote it again from Control → CSP Profiles once they are clean.',
 				'warning'
 			);
 		}

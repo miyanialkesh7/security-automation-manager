@@ -99,7 +99,7 @@ class Action_Centre {
 					$unclassified_dependencies
 				),
 				'why_it_matters'     => __( 'An unclassified dependency has not been reviewed as expected, pinned, or flagged as suspicious -- that review is what lets SAM tell a routine update apart from an unexpected change.', 'vcns-security-automation-manager' ),
-				'recommended_action' => __( 'Classify each dependency on the Scripts page.', 'vcns-security-automation-manager' ),
+				'recommended_action' => __( 'Classify each dependency under Decide → Dependency Classification.', 'vcns-security-automation-manager' ),
 				'what_will_happen'   => __( 'Classifying a dependency records your decision about it; it does not change whether the script currently runs.', 'vcns-security-automation-manager' ),
 				'evidence_url'       => admin_url( 'admin.php?page=security-automation-manager-scripts' ),
 				'risk'               => 'low',
