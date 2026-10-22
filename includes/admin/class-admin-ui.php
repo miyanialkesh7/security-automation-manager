@@ -2517,6 +2517,14 @@ class Admin_UI {
 	 * (the only severities Audit_Log queues as notices); returns null for
 	 * anything else.
 	 *
+	 * Labels name the route as staff actually see it: the left-hand menu
+	 * shows only Settings, Observe, Decide, Control and Verify, and every
+	 * other SAM page (CSP, Scripts, Traffic Controls, Certificates, ...) is
+	 * hidden from it by print_hidden_menu_css() and reached through a link
+	 * on one of those five. Each label below uses the stage and the link
+	 * text that stage's own page shows; URLs match those links. See the
+	 * "Admin navigation" section of CLAUDE.md.
+	 *
 	 * @return array{url: string, label: string}|null
 	 */
 	private function admin_notice_action( string $component, string $event ): ?array {
@@ -2527,44 +2535,45 @@ class Admin_UI {
 			case 'dependency_integrity_monitor':
 				return array(
 					'url'   => admin_url( 'admin.php?page=security-automation-manager-scripts&tab=external' ),
-					'label' => __( 'Open Scripts → External', 'vcns-security-automation-manager' ),
+					'label' => __( 'Open Decide → Dependency Classification', 'vcns-security-automation-manager' ),
 				);
 
 			case 'discovery':
 				return array(
 					'url'   => $csp( 'scan-log' ),
-					'label' => __( 'Open CSP → Scan Log', 'vcns-security-automation-manager' ),
+					'label' => __( 'Open Observe → Scan Log', 'vcns-security-automation-manager' ),
 				);
 
 			case 'conflict_detector':
+				// The competing-header banner shows above every CSP tab.
 				return array(
-					'url'   => $csp( 'start-here' ),
-					'label' => __( 'Open CSP', 'vcns-security-automation-manager' ),
+					'url'   => $csp( 'profiles' ),
+					'label' => __( 'Open Control → CSP Profiles', 'vcns-security-automation-manager' ),
 				);
 
 			case 'policy_builder':
 			case 'hash_manager':
 				return array(
 					'url'   => $csp( 'policy-audit' ),
-					'label' => __( 'Open CSP → Policy Audit', 'vcns-security-automation-manager' ),
+					'label' => __( 'Open Verify → CSP Policy Audit', 'vcns-security-automation-manager' ),
 				);
 
 			case 'policy_change':
 				if ( 'admin_csp_held_report_only' === $event ) {
 					return array(
 						'url'   => $csp( 'profiles' ),
-						'label' => __( 'Open CSP → Profiles', 'vcns-security-automation-manager' ),
+						'label' => __( 'Open Control → CSP Profiles', 'vcns-security-automation-manager' ),
 					);
 				}
 				return array(
 					'url'   => $csp( 'sources' ),
-					'label' => __( 'Open CSP → For Review', 'vcns-security-automation-manager' ),
+					'label' => __( 'Open Decide → For Review', 'vcns-security-automation-manager' ),
 				);
 
 			case 'certificates':
 				return array(
-					'url'   => admin_url( 'admin.php?page=security-automation-manager-certificates' ),
-					'label' => __( 'Open Certificates', 'vcns-security-automation-manager' ),
+					'url'   => admin_url( 'admin.php?page=security-automation-manager-certificates&tab=renew' ),
+					'label' => __( 'Open Control → Certificates', 'vcns-security-automation-manager' ),
 				);
 
 			case 'config_portability':
@@ -2583,7 +2592,7 @@ class Admin_UI {
 				if ( str_starts_with( $event, 'tor_exit_list_' ) ) {
 					return array(
 						'url'   => $network( 'tor' ),
-						'label' => __( 'Open Traffic Controls → Tor Exit List', 'vcns-security-automation-manager' ),
+						'label' => __( 'Open Control → Traffic Controls → Tor Exit List', 'vcns-security-automation-manager' ),
 					);
 				}
 				// The six well-known-file refreshes (robots_rules_, agents_rules_,
@@ -2591,13 +2600,13 @@ class Admin_UI {
 				if ( 1 === preg_match( '/^(robots_rules|agents_rules|security_txt|humans_txt|ads_txt|app_ads_txt)_/', $event ) ) {
 					return array(
 						'url'   => $network( 'well-known' ),
-						'label' => __( 'Open Traffic Controls → Well-Known Files', 'vcns-security-automation-manager' ),
+						'label' => __( 'Open Control → Traffic Controls → Well-Known Files', 'vcns-security-automation-manager' ),
 					);
 				}
 				// scan_exception / manual_scan_exception.
 				return array(
 					'url'   => $csp( 'scan-log' ),
-					'label' => __( 'Open CSP → Scan Log', 'vcns-security-automation-manager' ),
+					'label' => __( 'Open Observe → Scan Log', 'vcns-security-automation-manager' ),
 				);
 		}
 
@@ -3493,7 +3502,7 @@ class Admin_UI {
 		// Site-wide, not surface-scoped -- see Conflict_Detector::
 		// has_recent_conflicts()'s own docblock for why.
 		if ( ( new Conflict_Detector( $this->plugin->audit ) )->has_recent_conflicts() ) {
-			return __( 'Cannot promote to enforce: a competing Content-Security-Policy header was detected recently. Review the conflict banner on the CSP dashboard before enabling enforcement.', 'vcns-security-automation-manager' );
+			return __( 'Cannot promote to enforce: a competing Content-Security-Policy header was detected recently. Review the competing-header banner at the top of this page before enabling enforcement.', 'vcns-security-automation-manager' );
 		}
 
 		// External verification (roadmap §10.3) is not a gate here -- no

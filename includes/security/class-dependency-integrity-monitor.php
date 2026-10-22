@@ -136,7 +136,7 @@ class Dependency_Integrity_Monitor {
 					'dependency_integrity_monitor',
 					'sri_mismatch',
 					sprintf(
-						"Pinned SRI hash for '%s' (%s, %s surface) no longer matches what the live page serves -- %s Review and update the pinned hash on the External Scripts page, or the enforcing element will be removed on the next real page load with enforce mode active.",
+						"Pinned SRI hash for '%s' (%s, %s surface) no longer matches what the live page serves -- %s Review and update the pinned hash under Decide → Dependency Classification, or the enforcing element will be removed on the next real page load with enforce mode active.",
 						$origin,
 						$resource_type,
 						$surface,

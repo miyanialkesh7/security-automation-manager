@@ -780,11 +780,11 @@ class AdminUITest extends TestCase {
 		return array(
 			'SRI mismatch -> External Scripts'   => array( 'dependency_integrity_monitor', 'sri_mismatch', 'admin.php?page=security-automation-manager-scripts&tab=external' ),
 			'discovery -> Scan Log'              => array( 'discovery', 'crawl_http_error', 'admin.php?page=security-automation-manager-dashboard&tab=scan-log' ),
-			'conflict -> CSP dashboard'          => array( 'conflict_detector', 'csp_conflict', 'admin.php?page=security-automation-manager-dashboard&tab=start-here' ),
+			'conflict -> Control CSP Profiles'   => array( 'conflict_detector', 'csp_conflict', 'admin.php?page=security-automation-manager-dashboard&tab=profiles' ),
 			'hash budget -> Policy Audit'        => array( 'policy_builder', 'hash_budget_exceeded', 'admin.php?page=security-automation-manager-dashboard&tab=policy-audit' ),
 			'proposal -> For Review'             => array( 'policy_change', 'source_proposed', 'admin.php?page=security-automation-manager-dashboard&tab=sources' ),
 			'admin CSP held -> Profiles'         => array( 'policy_change', 'admin_csp_held_report_only', 'admin.php?page=security-automation-manager-dashboard&tab=profiles' ),
-			'certificate -> Certificates'        => array( 'certificates', 'cert_issue_failed', 'admin.php?page=security-automation-manager-certificates' ),
+			'certificate -> Certificates'        => array( 'certificates', 'cert_issue_failed', 'admin.php?page=security-automation-manager-certificates&tab=renew' ),
 			'import -> Recovery'                 => array( 'config_portability', 'config_imported', 'admin.php?page=security-automation-manager&tab=recovery#wp-sam-portability' ),
 			'rollback -> Recovery'               => array( 'rollback', 'snapshot_restored', 'admin.php?page=security-automation-manager&tab=recovery' ),
 			'security.txt -> Well-Known Files'   => array( 'scheduler', 'security_txt_refresh_failed', 'admin.php?page=security-automation-manager-traffic&tab=network-intelligence&subtab=well-known' ),
@@ -816,6 +816,10 @@ class AdminUITest extends TestCase {
 		$output = (string) ob_get_clean();
 
 		$this->assertStringContainsString( 'href="https://example.com/wp-admin/' . $expected_path . '"', $output );
+		// Staff only see Settings, Observe, Decide, Control and Verify in the
+		// left-hand menu; every other SAM page is reached through one of
+		// them, so a label naming a hidden page alone is a dead end.
+		$this->assertMatchesRegularExpression( '#">Open (Settings|Observe|Decide|Control|Verify) → [^<]+</a>#u', $output );
 	}
 
 	public function test_display_admin_notices_adds_no_link_for_an_unmapped_component(): void {

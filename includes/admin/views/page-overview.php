@@ -423,7 +423,7 @@ $rollback_snapshots = Rollback_Guard::list_snapshots();
 
 	<h2><?php esc_html_e( 'Layer 3: Continuous Intelligence', 'vcns-security-automation-manager' ); ?></h2>
 	<p class="description">
-		<?php esc_html_e( 'Every request your site receives passes through a set of pattern-matching detectors that recognise the signature of common attacks -- SQL injection attempts, path traversal, malicious bots, and more. Each detector can simply watch and record evidence, or actively block, entirely under your control from the Continuous Intelligence page; the row below just shows how many are switched on right now.', 'vcns-security-automation-manager' ); ?>
+		<?php esc_html_e( 'Every request your site receives passes through a set of pattern-matching detectors that recognise the signature of common attacks -- SQL injection attempts, path traversal, malicious bots, and more. Each detector can simply watch and record evidence, or actively block, entirely under your control from Control → Traffic Controls → Detectors; the row below just shows how many are switched on right now.', 'vcns-security-automation-manager' ); ?>
 	</p>
 	<div class="wp-sam-table-wrap">
 	<table class="widefat striped wp-sam-readiness-table wp-sam-table">

@@ -356,7 +356,7 @@ $tab_help = array(
 			<?php submit_button( __( 'Run Drift Scan and Close Window', 'vcns-security-automation-manager' ), 'primary', '', false ); ?>
 		</form>
 		<p class="description" style="margin-top:1em">
-			<?php esc_html_e( 'Closing runs a fresh drift scan for an accurate delta, then closes the window. To accept the new state as the known-good baseline afterwards, use Capture Baseline on the Baseline & Drift page -- that stays a separate, explicit step.', 'vcns-security-automation-manager' ); ?>
+			<?php esc_html_e( 'Closing runs a fresh drift scan for an accurate delta, then closes the window. To accept the new state as the known-good baseline afterwards, use Capture Baseline under Verify → Baseline & Drift -- that stays a separate, explicit step.', 'vcns-security-automation-manager' ); ?>
 		</p>
 
 		<?php else : ?>
