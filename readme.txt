@@ -4,7 +4,7 @@ Tags: security, csp, content security policy, hsts, ssl certificates
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 2.11.1
+Stable tag: 2.11.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,28 @@ The remaining three DNS-01 drivers (acme-dns, PowerDNS, and RFC 2136 dynamic DNS
 When an administrator configures automatic cPanel deployment, once a certificate is successfully issued the plugin sends an HTTPS request to the cPanel host the administrator specifies (cPanel's UAPI SSL::install_ssl endpoint), containing: the cPanel account username and API token supplied by the administrator (as an Authorization header); the domain name; the issued certificate; the certificate chain; and the certificate's private key. This is the one automatic-deployment method that transmits the private key itself, since installing a certificate requires it. Nothing is sent unless cPanel deployment is explicitly configured, and it happens once per issuance or renewal, immediately after the certificate is issued. Because the endpoint is the administrator's own hosting provider, not a service this plugin operates or has a relationship with, no single Terms of Service or Privacy Policy governs it -- those are whatever the administrator's own hosting provider publishes for their account and API access.
 
 == Changelog ==
+
+= 2.11.4 =
+
+* Fixed: the Content Security Policy for your WordPress dashboard (the admin surface) is now actually sent. Earlier versions never delivered it on ordinary dashboard pages, so "no violations reported" there meant nothing. If your admin policy was set to Enforce, it has been moved back to Report-only once, so you can review its real reports before promoting it again.
+* Fixed: "Promote this surface to Enforce" is now only suggested when the plugin has evidence that the policy was actually being sent for the whole 30 days, and wasn't having to drop learned approvals to stay within its size limit. Expect no such suggestions for the first 30 days after updating while that evidence builds up.
+* Changed: the REST API is no longer treated as a Content Security Policy surface you review and promote. API responses (JSON) never load scripts, styles or images, so there was nothing to learn there; they now get a fixed, locked-down policy instead, and the API surface no longer appears on the CSP screens.
+
+= 2.11.3 =
+
+* Fixed: the daily checks of this site's own robots.txt, agents.txt, security.txt, humans.txt, ads.txt and app-ads.txt, and the security-header discovery scan, no longer follow a redirect to a different website. Previously, on a site that redirects some visitors elsewhere (for example a staging site that sends unknown visitors to the live site), the plugin could read the other site's files and pages and report them as this site's own.
+* Fixed: a site that simply doesn't have one of those optional files is now recorded as "Absent" instead of raising a daily "refresh failed" warning.
+* Fixed: a discovery scan refused by a firewall or login protection is now logged quietly instead of raising an admin warning.
+* Fixed: plugin admin notices are now shown only to administrators. Previously any logged-in user who could reach the dashboard could see them, and seeing them cleared them before an administrator did.
+* Fixed: Content Security Policy hash learning no longer records JSON-LD structured data (such as SEO schema markup), which browsers never run and CSP doesn't control. On sites with many pages these filled the policy's size budget and could push out the approvals real inline scripts need.
+* Fixed: an inline script that directly follows an external script tag is now recognised and approved correctly.
+* Fixed: hashes for inline style attributes are no longer sent in the policy unless they can take effect, so they no longer use up the policy's size budget. A manual rescan now also retires approvals unused for 30 days.
+* Improved: Advanced Intelligence → Campaigns now shows how many IPs are active in the last 24 hours separately from the count recorded when the campaign was detected, and marks your own IP in the list.
+* Fixed: blocking a campaign's participants no longer includes your own IP or the site's own loopback address, so it can't lock you out of your dashboard. The button now says how many IPs it will block.
+
+= 2.11.2 =
+
+* Documentation only, no functional change from 2.11.1. Corrected the pillar count and pillar list on this page and in the bundled documentation: Information Masking and Cache-Control were missing from several lists, which made the counts disagree with each other and with the plugin itself.
 
 = 2.11.1 =
 

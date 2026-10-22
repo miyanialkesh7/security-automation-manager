@@ -4,6 +4,46 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows semantic versioning for plugin releases.
 
+## [2.11.4] - 2026-10-22
+
+### Fixed
+
+- **The admin surface's CSP is now sent** (#446). `Header_Builder` emits from `send_headers`, `login_init` and `wp_redirect`. WordPress fires `send_headers` only from `WP::main()`, which wp-admin never runs, so ordinary wp-admin pages never received the admin policy. `Policy_Builder` now also hooks `admin_init` (priority 1), skipping admin-ajax. This covers CSP only: the other header pillars still skip wp-admin, since X-Frame-Options or COOP/COEP there can break admin features.
+- **Schema v47 holds an enforcing admin CSP profile at report-only, once** (#446). Those sites had been running with no admin policy at all, and would otherwise have started enforcing a never-tested one on the dashboard. The migration is guarded by `wp_sam_admin_csp_held_v47` and logs a warning notice.
+- **`csp_enforce_ready` now needs evidence the policy was delivered** (#446). The recommendation had fired on staging and production for the admin surface, reading 30 days without reports as a clean run of a policy that was never sent. New `Csp_Delivery_Log` keeps one autoloaded `wp_sam_csp_delivery_{surface}` option per surface, with writes throttled hourly. It records when a policy was first and last sent (a gap over 7 days restarts the clock) and when its hashes were last trimmed to fit the byte budget. The rule now also requires 30 days of continuous delivery, a send in the last 7 days, and no trimming in the window.
+- **`pillar_enforce_ready` skips the admin and api surfaces** (#446), where pillar headers are never delivered.
+
+### Changed
+
+- **The learned api CSP is retired in favour of a fixed REST header** (#446). REST requests are served during `parse_request`, before `send_headers`, so the api policy never applied, and a JSON response can't produce a violation. `Policy_Builder` no longer emits it. New `Rest_Csp_Header` adds `default-src 'none'; frame-ancestors 'none'` to JSON REST responses unless the endpoint set its own CSP or a non-JSON `Content-Type`. It's filterable via `wp_sam_rest_csp_header`.
+- **The api surface is removed from CSP learning and the CSP screens** (#447). New `Csp_Surfaces::ALL` (frontend, admin, login) is the single source of CSP's surfaces.
+  - Discovery no longer crawls `rest_url()`. That crawl is where a high-risk "Proposed api form-action alltimetech.co.uk" came from, after staging redirected it to production.
+  - `Policy_Change_Manager::propose_source()` rejects non-CSP surfaces.
+  - The CSP dashboard, its handlers and the CSP rows in the Readiness Checker, Action Centre, Overview, Protection Status and Security Health show only CSP surfaces.
+  - Non-CSP controls and stored data keep `api`.
+
+## [2.11.3] - 2026-10-21
+
+### Fixed
+
+- **SAM's requests to its own site no longer follow redirects to other hosts** (#443). The six well-known-file stores (robots, agents, security, humans, ads, app-ads) and `Discovery::crawl_url()` used `wp_remote_get` with WordPress's default of following up to 5 redirects, and never checked the final URL. On staging.alltimetech.co.uk, whose `.htaccess` 301s non-approved IPs to production, that meant SAM reported production's status codes as the site's own, and the discovery crawl filed production's sources against staging's surfaces (for example a high-risk `form-action alltimetech.co.uk` proposal on the api surface). The new `Same_Host_Fetcher` follows up to 5 redirects only while they stay on the same host (treated as equal if they differ only by `www.`). It returns `wp_sam_offsite_redirect` instead of following one off-site. Discovery logs that case as `crawl_redirected_offsite` (warning). `parse_stylesheet_sources()` is unchanged, since it fetches third-party stylesheets on purpose.
+- **A missing well-known file is now `absent`, not `failed`** (#443). A 404 or 410 records `absent`, clears the cached data and logs `*_absent` at info, so it no longer raises a daily admin notice. Security.txt is absent only when both `/.well-known/security.txt` and `/security.txt` return 404/410; otherwise the failure message names both results. Other non-200 responses and transport errors still log `*_refresh_failed` at warning.
+- **Discovery crawls refused with HTTP 401/403 log `crawl_blocked` at info** instead of `crawl_http_error` at warning (#443). These are typically a firewall or login protection rejecting an anonymous server-side GET to `wp-login.php`.
+- **`Admin_UI::display_admin_notices()` now requires `manage_options`** (#443). Without that check, any logged-in wp-admin user saw the queued technical notices, and seeing them emptied the queue before an administrator saw it.
+- **CSP hash learning no longer hashes JSON data blocks** (#442). Inline `<script type="application/ld+json">` and `type="application/json"` are skipped, because browsers never execute them and CSP doesn't govern them. On staging about 1,655 of 1,763 active frontend hashes were Yoast schema blocks, one per page. They triggered `hash_budget_exceeded` ("Dropped 1716 …") and could push out hashes for real inline scripts. Other non-JavaScript types (`litespeed/javascript`, `rocketlazyloadscript`, `text/plain`) and `importmap`/`speculationrules` are still hashed.
+- **The inline-script extraction pattern no longer mis-captures** when `src` isn't the first attribute (#442). Previously, `<script type="…" src="…"></script>` followed by an inline script produced one junk hash spanning both tags, and the real inline script never got a valid hash.
+- **`style-src-attr`/`script-src-attr` hashes are emitted, and counted against the hash byte budget, only when the directive carries `'unsafe-hashes'`** (#442). Without it they have no effect under CSP Level 3. The emitted directive is otherwise byte-identical, so enforcement doesn't loosen.
+- **`run_manual_scan()` now also calls `Hash_Manager::prune_stale_by_age()`** (#442), which the daily scan already did. It retires active hashes not seen for 30 days.
+- **Advanced Intelligence → Campaigns labels its two counts separately** (#445). The Participants column showed the `participant_count` stored at detection ("37 distinct IPs") over a popover of IPs re-queried live for the last 24 hours, which on staging held one IP. It now shows the live count (`1 active`), which matches the popover and the Block action, plus the stored count (`37 when detected`) when the two differ. The popover names its window and marks the viewer's own IP.
+- **Campaign blocks never include the acting admin's own IP or a loopback address** (#445). `Campaign_Detector::block_participants()` adds explicit all-surface `sam_ip_rules` blocks, which apply even to logged-in admins, so an admin whose own IP had tripped the same detector could lock themselves out of wp-admin. `Campaign_Detector::blockable_ips()` filters both the action and the view. The button states how many IPs it will block and is disabled when there are none.
+
+## [2.11.2] - 2026-10-21
+
+### Fixed
+
+- No functional change from 2.11.1. Public docs disagreed on how many security-header pillars the plugin has ("ten" in `docs/index.html`, "twelve" in `docs/user-guide.html`, "seven more" in `readme.txt`), because Information Masking and Cache-Control were added as pillars without updating every list that enumerated or counted them. `README.md`, `readme.txt`, `SPECIFICATION.md`, `docs/index.html`, `docs/user-guide.html`, `docs/architecture.md`, `docs/rollback-and-recovery.md`, `docs/images/README.md` and the `Config_Portability` docblock now consistently say twelve (CSP plus eleven), with both missing pillars listed. `docs/architecture.md` also no longer claims none of the eleven has a report-only mode: COOP and COEP do (#429).
+- CI only: the `Secret Scan` job in `ci.yml` checks out the pull request head by SHA instead of by branch name, so it no longer fails at checkout on pull requests opened from a fork. Pushes to `development`/`main` behave as before (#439).
+
 ## [2.11.1] - 2026-09-17
 
 ### Fixed
