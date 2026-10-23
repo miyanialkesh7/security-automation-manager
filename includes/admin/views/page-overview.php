@@ -779,7 +779,7 @@ $rollback_snapshots = Rollback_Guard::list_snapshots();
 					<th scope="row" class="wp-sam-col-primary">
 						<?php echo esc_html( $item['label'] ); ?>
 						<?php if ( '' !== $item['detail'] ) : ?>
-						<span class="dashicons dashicons-info-outline wp-sam-meta-icon" tabindex="0">
+						<span class="wp-sam-meta-icon" tabindex="0"><span class="dashicons dashicons-info-outline" aria-hidden="true"></span>
 							<span class="wp-sam-meta-popover" role="tooltip"><?php echo esc_html( $item['detail'] ); ?></span>
 						</span>
 						<?php endif; ?>

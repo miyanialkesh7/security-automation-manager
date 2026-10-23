@@ -397,6 +397,9 @@ details.wp-sam-filter-form form {
 	z-index: 10;
 	width: 360px;
 	max-width: 80vw;
+	/* A campaign can list up to 100 IPs; scroll inside rather than run off-screen. */
+	max-height: 60vh;
+	overflow-y: auto;
 	margin-top: 6px;
 	padding: 10px 12px;
 	background: #fff;
@@ -414,6 +417,21 @@ details.wp-sam-filter-form form {
 .wp-sam-meta-icon:hover .wp-sam-meta-popover,
 .wp-sam-meta-icon:focus .wp-sam-meta-popover {
 	display: block;
+}
+
+/* The info glyph is its own .dashicons child, not the hover target itself,
+ * so the popover is never a descendant of .dashicons -- that class sets the
+ * icon font and a 20px box, which the popover's text otherwise inherited. */
+.wp-sam-meta-icon > .dashicons {
+	vertical-align: top;
+}
+
+/* .wp-sam-table-wrap scrolls sideways (overflow-x: auto), which also clips
+ * anything absolutely positioned below its bottom edge -- an open popover
+ * on a table's last rows was cut off. Let it overflow only while one is
+ * actually open. */
+.wp-sam-table-wrap:has( :is( .wp-sam-meta-icon, .wp-sam-risk-badge--has-note, .wp-sam-status-badge--has-note, .wp-sam-known-source-badge ):is( :hover, :focus ) ) {
+	overflow: visible;
 }
 
 .wp-sam-meta-row {
