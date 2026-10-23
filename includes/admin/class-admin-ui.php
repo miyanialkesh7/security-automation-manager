@@ -777,6 +777,13 @@ class Admin_UI {
 			'security-automation-manager_page_security-automation-manager-intelligence',
 			'security-automation-manager_page_security-automation-manager-traffic',
 			'security-automation-manager_page_security-automation-manager-baseline',
+			// Missing from 2.9.44 (when the page was added) until 2.11.5: the
+			// page rendered without admin.css (every info popover stayed open,
+			// stacked down the table) and without admin.js, whose shared
+			// Reason field is the only way the Campaigns forms get their
+			// required note -- so Acknowledge, Dismiss and Block all silently
+			// did nothing. AdminUITest now checks every registered page.
+			'security-automation-manager_page_security-automation-manager-advanced',
 		);
 	}
 
