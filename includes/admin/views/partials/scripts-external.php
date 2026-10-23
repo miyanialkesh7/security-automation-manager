@@ -242,7 +242,7 @@ $classification_labels = array(
 				<td class="wp-sam-col-technical">
 					<code><?php echo esc_html( $item['origin'] ); ?></code>
 					<?php if ( ! empty( $item['last_seen_url'] ) ) : ?>
-					<span class="dashicons dashicons-info-outline wp-sam-meta-icon" tabindex="0">
+					<span class="wp-sam-meta-icon" tabindex="0"><span class="dashicons dashicons-info-outline" aria-hidden="true"></span>
 						<span class="wp-sam-meta-popover" role="tooltip">
 							<div class="wp-sam-meta-row">
 								<strong><?php esc_html_e( 'Last seen URL', 'vcns-security-automation-manager' ); ?>:</strong>

@@ -957,7 +957,7 @@ $tab_help = array(
 							<?php else : ?>
 							<input type="hidden" name="<?php echo esc_attr( $field_prefix ); ?>[control_action]" value="observe" />
 								<?php esc_html_e( 'Observe only', 'vcns-security-automation-manager' ); ?>
-								<span class="dashicons dashicons-info-outline wp-sam-meta-icon" tabindex="0">
+								<span class="wp-sam-meta-icon" tabindex="0"><span class="dashicons dashicons-info-outline" aria-hidden="true"></span>
 									<span class="wp-sam-meta-popover" role="tooltip">
 										<?php esc_html_e( 'Fixed -- this family has no Enforce mode. Either it\'s a benign identity/recognition signal (e.g. Tor exit status, a crawler checking robots.txt) rather than an attack pattern, or being flagged alone isn\'t reliable enough on its own to safely block on.', 'vcns-security-automation-manager' ); ?>
 									</span>
