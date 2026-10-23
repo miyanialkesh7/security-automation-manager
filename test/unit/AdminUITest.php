@@ -179,6 +179,31 @@ class AdminUITest extends TestCase {
 		$this->assertContains( 'security-automation-manager_page_security-automation-manager-verify', $hooks );
 	}
 
+	public function test_every_registered_page_loads_the_shared_admin_assets(): void {
+		// Advanced Intelligence was registered in 2.9.44 but never added to
+		// plugin_page_hooks(), so it rendered without admin.css/admin.js
+		// until 2.11.5 -- open popovers stacked down the page, and the
+		// Campaigns forms never received their required note. Certificates
+		// is the one deliberate exception (certificates_page_hook()).
+		wp_test_reset_globals();
+		$ui = $this->make_admin_ui();
+		$ui->add_menu_pages();
+
+		$method = new ReflectionMethod( Admin_UI::class, 'plugin_page_hooks' );
+		$hooks  = $method->invoke( $ui );
+
+		foreach ( array_unique( array_column( $GLOBALS['_wp_submenu_pages']['security-automation-manager'], 'menu_slug' ) ) as $slug ) {
+			if ( 'security-automation-manager-certificates' === $slug ) {
+				continue;
+			}
+			$hook = 'security-automation-manager' === $slug
+				? 'toplevel_page_security-automation-manager'
+				: 'security-automation-manager_page_' . $slug;
+
+			$this->assertContains( $hook, $hooks, "{$slug} is registered but would load without admin.css/admin.js" );
+		}
+	}
+
 	public function test_add_menu_pages_registers_settings_first_then_lifecycle_pages_in_roadmap_order(): void {
 		wp_test_reset_globals();
 		$ui = $this->make_admin_ui();
@@ -275,6 +300,26 @@ class AdminUITest extends TestCase {
 		) {
 			$this->assertStringContainsString( 'page=' . $pillar_slug, $css );
 		}
+	}
+
+	public function test_advanced_intelligence_is_hidden_from_the_menu_but_still_registered(): void {
+		// Its tabs are linked from Observe, Decide, Control and Verify; the
+		// page itself must stay registered so those links (and direct URLs)
+		// keep working.
+		wp_test_reset_globals();
+		$ui = $this->make_admin_ui();
+		$ui->add_menu_pages();
+
+		$this->assertContains(
+			'security-automation-manager-advanced',
+			array_column( $GLOBALS['_wp_submenu_pages']['security-automation-manager'], 'menu_slug' )
+		);
+
+		ob_start();
+		$ui->print_hidden_menu_css();
+		$css = (string) ob_get_clean();
+
+		$this->assertStringContainsString( 'page=security-automation-manager-advanced"', $css );
 	}
 
 	public function test_print_hidden_menu_css_does_not_hide_lifecycle_or_settings_pages(): void {
