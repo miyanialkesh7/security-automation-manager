@@ -104,7 +104,7 @@ class PageAdvancedTest extends TestCase {
 
 		unset( $_GET['tab'], $_SERVER['REMOTE_ADDR'] );
 
-		$this->assertStringContainsString( '<code>203.0.113.10</code> (your IP)', $output );
+		$this->assertStringContainsString( '<code>203.0.113.10 (your IP)</code>', $output );
 		$this->assertStringContainsString( 'Block 1 Active IP', $output );
 		$this->assertStringNotContainsString( 'Block 2 Active IPs', $output );
 	}

@@ -143,15 +143,17 @@ $tab_help = array(
 				// Block acts on) is re-queried live for the same window.
 				// Show both, labelled, so a list shorter than the headline
 				// count doesn't look like missing data.
+				// One <code> per IP: .wp-sam-meta-row code is display:block,
+				// so each sits on its own line and no separator is needed.
 				$ips_markup = implode(
-					', ',
+					'',
 					array_map(
 						static function ( string $ip ) use ( $viewer_ip ): string {
-							$markup = '<code>' . esc_html( $ip ) . '</code>';
+							$label = esc_html( $ip );
 							if ( '' !== $viewer_ip && $ip === $viewer_ip ) {
-								$markup .= ' ' . esc_html__( '(your IP)', 'vcns-security-automation-manager' );
+								$label .= ' ' . esc_html__( '(your IP)', 'vcns-security-automation-manager' );
 							}
-							return $markup;
+							return '<code>' . $label . '</code>';
 						},
 						$ips_shown
 					)
@@ -171,7 +173,7 @@ $tab_help = array(
 					);
 					?>
 					<?php if ( ! empty( $participant_ips ) ) : ?>
-					<span class="dashicons dashicons-info-outline wp-sam-meta-icon" tabindex="0">
+					<span class="wp-sam-meta-icon" tabindex="0"><span class="dashicons dashicons-info-outline" aria-hidden="true"></span>
 						<span class="wp-sam-meta-popover" role="tooltip">
 							<div class="wp-sam-meta-row"><strong>
 								<?php
@@ -356,7 +358,7 @@ $tab_help = array(
 			<?php submit_button( __( 'Run Drift Scan and Close Window', 'vcns-security-automation-manager' ), 'primary', '', false ); ?>
 		</form>
 		<p class="description" style="margin-top:1em">
-			<?php esc_html_e( 'Closing runs a fresh drift scan for an accurate delta, then closes the window. To accept the new state as the known-good baseline afterwards, use Capture Baseline on the Baseline & Drift page -- that stays a separate, explicit step.', 'vcns-security-automation-manager' ); ?>
+			<?php esc_html_e( 'Closing runs a fresh drift scan for an accurate delta, then closes the window. To accept the new state as the known-good baseline afterwards, use Capture Baseline under Verify → Baseline & Drift -- that stays a separate, explicit step.', 'vcns-security-automation-manager' ); ?>
 		</p>
 
 		<?php else : ?>

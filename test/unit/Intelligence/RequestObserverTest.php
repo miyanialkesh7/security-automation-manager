@@ -21,6 +21,7 @@ use WP_SAM\Intelligence\Scanner_Identity_Store;
 use WP_SAM\Intelligence\Scanner_Vendor_Store;
 use WP_SAM\Intelligence\Tor_Exit_List_Store;
 use WP_SAM\Intelligence\Traffic_Block_Store;
+use WP_SAM\Security\Conflict_Probe_Token;
 use WP_SAM\Security\Request_Surface;
 
 class RequestObserverTest extends TestCase {
@@ -169,11 +170,26 @@ class RequestObserverTest extends TestCase {
 		Detector_Registry::register( new Observer_Fixture_Detector() );
 
 		$server_key             = 'HTTP_' . strtoupper( str_replace( '-', '_', Request_Surface::CONFLICT_PROBE_HEADER ) );
-		$_SERVER[ $server_key ] = '1';
+		$_SERVER[ $server_key ] = Conflict_Probe_Token::issue();
 
 		$this->observer->observe();
 
 		$this->assertSame( array(), $GLOBALS['_wpdb_queries'] );
+
+		unset( $_SERVER[ $server_key ] );
+	}
+
+	public function test_observe_still_records_a_request_that_only_claims_to_be_the_probe(): void {
+		// Regression: a client sending the probe header with the old fixed
+		// value used to be invisible to every detector.
+		Detector_Registry::register( new Observer_Fixture_Detector() );
+
+		$server_key             = 'HTTP_' . strtoupper( str_replace( '-', '_', Request_Surface::CONFLICT_PROBE_HEADER ) );
+		$_SERVER[ $server_key ] = '1';
+
+		$this->observer->observe();
+
+		$this->assertNotSame( array(), $GLOBALS['_wpdb_queries'] );
 
 		unset( $_SERVER[ $server_key ] );
 	}

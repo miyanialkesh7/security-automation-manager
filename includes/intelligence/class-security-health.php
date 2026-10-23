@@ -157,7 +157,7 @@ final class Security_Health {
 				$count
 			),
 			'status' => $count > 0 ? 'warning' : 'pass',
-			'detail' => __( 'Review open drift on the Baseline & Drift page.', 'vcns-security-automation-manager' ),
+			'detail' => __( 'Review open drift under Verify → Baseline & Drift.', 'vcns-security-automation-manager' ),
 		);
 	}
 
@@ -238,7 +238,7 @@ final class Security_Health {
 				$unclassified
 			),
 			'status' => $unclassified > 0 ? 'warning' : 'pass',
-			'detail' => __( 'Review the Scripts page to approve, pin, or reject each origin.', 'vcns-security-automation-manager' ),
+			'detail' => __( 'Review each origin under Decide → Dependency Classification to approve, pin, or reject it.', 'vcns-security-automation-manager' ),
 		);
 	}
 
