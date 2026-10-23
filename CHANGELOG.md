@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows semantic versioning for plugin releases.
 
+## [2.11.5] - 2026-10-23
+
+### Security
+
+- **The conflict-probe header now requires a one-time token** (#450). `Conflict_Detector`'s internal probe sends `X-WP-SAM-Probe` so SAM suppresses its own headers, request observation and Traffic Guard for that one request. The check accepted a fixed value, so any client sending it skipped Traffic Guard entirely, including explicit IP block rules, and went unseen by every detector.
+  - New `Conflict_Probe_Token` issues a random 32-byte token per probe. It is stored only as a SHA-256-keyed transient, valid for 60 seconds and revoked when the probe returns.
+  - `Surface_Classifier::is_conflict_probe_request()` accepts only a live token.
+  - The probe sets `redirection => 0`.
+
+### Fixed
+
+- **Advanced Intelligence loads `admin.css` and `admin.js`** (#452). The page was never in `Admin_UI::plugin_page_hooks()` (since 2.9.44).
+  - Without the CSS, every info popover stayed open, stacked down the Campaigns table.
+  - Without the JS, the shared Reason field never reached the Acknowledge, Dismiss and Block forms, so each submitted an empty note and did nothing.
+  - `AdminUITest` now checks that every registered page is in `plugin_page_hooks()`.
+- **Info popovers are no longer nested inside the `dashicons` glyph** (#452). This affected eight screens. The popover text inherited the icon font (serif fallback on stock WordPress) and the glyph's 20px box.
+- **Popovers are no longer clipped by `.wp-sam-table-wrap`'s horizontal scroll**, and they cap at 60vh (#452).
+- **The Campaigns IP list** puts one IP per line instead of comma-separated block `<code>`s (#452).
+- **`readme.txt`'s changelog is trimmed back to the 15 most recent releases** (#450). The 2.11.3/2.11.4 entries had pushed it past `VersionConsistencyTest`'s 4,000-word budget, failing PHPUnit on `main` and `development` since 2.11.4.
+
+### Changed
+
+- **Advanced Intelligence is hidden from the admin menu** (#452). Each tab is now linked from its lifecycle stage:
+  - Observe → Timeline
+  - Decide → Campaigns (with a count awaiting a decision)
+  - Control → Honey Paths
+  - Verify → Change Windows
+
+  `docs/user-guide.html` is aligned, and `PageLifecycleTest` covers the links.
+- **Queued admin notices link to where they can be acted on** (#451). `Admin_UI::admin_notice_action()` covers every component that logs at warning/error severity.
+- **Recommendations, Action Centre and Security Health items, notices and cross-page help text name the lifecycle route** (#451), e.g. "Decide → Dependency Classification", instead of pages hidden from the menu.
+- **New `CLAUDE.md`** (#451, #452) documents the admin navigation model and route table for agents. `CONTRIBUTING.md` gains a short routing rule. Both are excluded from the plugin ZIP.
+
 ## [2.11.4] - 2026-10-22
 
 ### Fixed
