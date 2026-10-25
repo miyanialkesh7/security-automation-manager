@@ -279,4 +279,30 @@ class TrafficGuardTest extends TestCase {
 		$this->assertCount( 1, $GLOBALS['_wpdb_inserted_rows'] );
 		unset( $_SERVER['REMOTE_ADDR'] );
 	}
+
+	// ── Private-network exemption ─────────────────────────────────────────────
+
+	public function test_private_network_source_is_never_blocked_by_automatic_escalation(): void {
+		// e.g. staging's own requests to itself, which arrive from 10.16.17.55.
+		$GLOBALS['_wpdb_get_results'] = array(); // No IP rules.
+
+		foreach ( array( '10.16.17.55', '172.20.0.5', '192.168.1.10', 'fd12:3456::1' ) as $ip ) {
+			$verdict = $this->guard->decide( $ip, 'frontend', false );
+
+			$this->assertSame( 'allow', $verdict['action'], $ip );
+			$this->assertFalse( $verdict['would_block'], $ip );
+		}
+	}
+
+	public function test_explicit_block_rule_still_applies_to_a_private_network_source(): void {
+		$GLOBALS['_wpdb_get_results'] = array(
+			array( 'id' => 1, 'list_type' => 'block', 'cidr' => '10.16.17.55', 'surface' => '', 'expires_at' => null ),
+		);
+
+		$verdict = $this->guard->decide( '10.16.17.55', 'frontend', false );
+
+		$this->assertSame( 'block', $verdict['action'] );
+		$this->assertSame( 'ip_rule_block', $verdict['reason'] );
+	}
+
 }

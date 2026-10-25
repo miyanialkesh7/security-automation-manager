@@ -188,10 +188,12 @@ final class Traffic_Guard {
 			);
 		}
 
-		// A loopback source (Cidr_Matcher::LOOPBACK_CIDRS) is the server
-		// calling itself -- wp-cron's own loopback requests, Site Health's
-		// "Loopback request" check, or an administrator testing from the
-		// same machine -- never a remote attacker (see Identity_Resolver's
+		// A loopback or private-network source (Cidr_Matcher::is_local())
+		// is the server calling itself -- wp-cron's own loopback requests,
+		// Site Health's "Loopback request" check, often arriving through an
+		// internal address rather than 127.0.0.1 -- or a sibling container,
+		// load balancer or health check inside the same hosting network,
+		// never a remote attacker (see Identity_Resolver's
 		// own docblock for the same recognition applied to identity/
 		// classification; both classes share one CIDR definition so they
 		// can never disagree on it). Automatic rate-limit escalation must
@@ -221,7 +223,7 @@ final class Traffic_Guard {
 		// automatic traffic protection at all. That is a deployment-
 		// topology caveat inherent to Ip_Resolver's trust model, not
 		// something this exemption introduces or can detect from here.
-		if ( Cidr_Matcher::ip_in_any_cidr( $ip, Cidr_Matcher::LOOPBACK_CIDRS ) ) {
+		if ( Cidr_Matcher::is_local( $ip ) ) {
 			return $allow;
 		}
 
