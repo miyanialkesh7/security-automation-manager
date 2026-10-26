@@ -149,4 +149,14 @@ class TrafficBlockStoreTest extends TestCase {
 		$this->assertSame( 0, $row['data']['is_persistent'] );
 		$this->assertNull( $row['data']['blocked_until'] );
 	}
+
+	public function test_record_violation_never_escalates_a_loopback_or_private_address(): void {
+		foreach ( array( '127.0.0.1', '10.16.17.55', '192.168.1.10', 'fd12:3456::1' ) as $ip ) {
+			$this->assertSame( array(), $this->store->record_violation( $ip, 'frontend', 'rate_limit' ), $ip );
+		}
+
+		$this->assertSame( array(), $GLOBALS['_wpdb_inserted_rows'] );
+		$this->assertSame( array(), $GLOBALS['_wpdb_updated_rows'] );
+	}
+
 }

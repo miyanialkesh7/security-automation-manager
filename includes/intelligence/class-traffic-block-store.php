@@ -78,9 +78,19 @@ final class Traffic_Block_Store {
 	 * row. A source already at 'persistent_block' is left untouched
 	 * (only bookkeeping fields change) -- see class docblock.
 	 *
+	 * A loopback or private-network address (Cidr_Matcher::is_local()) is
+	 * never escalated and returns an empty array. This is the one path every
+	 * automatic escalation takes (rate limits, failed logins, enforce-mode
+	 * detectors), so the site's own servers, containers and load balancers
+	 * never climb the ladder or show up in the Blocks list.
+	 *
 	 * @return array<string, mixed>
 	 */
 	public function record_violation( string $ip, string $surface, string $reason ): array {
+		if ( Cidr_Matcher::is_local( $ip ) ) {
+			return array();
+		}
+
 		global $wpdb;
 		$table       = $wpdb->prefix . 'sam_traffic_blocks';
 		$now         = current_time( 'mysql', true );

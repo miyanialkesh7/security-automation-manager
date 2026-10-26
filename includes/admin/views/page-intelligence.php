@@ -410,7 +410,7 @@ $tab_help = array(
 			'known_research_scanner'        => __( 'Known research scanner', 'vcns-security-automation-manager' ),
 			'known_crawler'                 => __( 'Known crawler', 'vcns-security-automation-manager' ),
 			'identity_conflict'             => __( 'Identity conflict', 'vcns-security-automation-manager' ),
-			'loopback'                      => __( 'Loopback (this server)', 'vcns-security-automation-manager' ),
+			'loopback'                      => __( 'This server or private network', 'vcns-security-automation-manager' ),
 			'customer_authorised'           => __( 'Authorised', 'vcns-security-automation-manager' ),
 			'explicitly_denied'             => __( 'Denied', 'vcns-security-automation-manager' ),
 			'previously_authorised_expired' => __( 'Authorisation expired', 'vcns-security-automation-manager' ),
@@ -428,7 +428,7 @@ $tab_help = array(
 			'admin_authorised'            => __( 'Authorised by admin', 'vcns-security-automation-manager' ),
 			'admin_denied'                => __( 'Denied by admin', 'vcns-security-automation-manager' ),
 			'admin_authorisation_expired' => __( 'Authorisation expired', 'vcns-security-automation-manager' ),
-			'loopback'                    => __( 'Loopback -- this server calling itself', 'vcns-security-automation-manager' ),
+			'loopback'                    => __( 'This server or private network -- never blocked automatically', 'vcns-security-automation-manager' ),
 			'verified_crawler'            => __( 'Verified crawler', 'vcns-security-automation-manager' ),
 			'claimed_crawler_unverified'  => __( 'Claimed crawler (unverified)', 'vcns-security-automation-manager' ),
 			'enumerating_scraper'         => __( 'Enumerating (sequential ID pattern)', 'vcns-security-automation-manager' ),
@@ -446,7 +446,7 @@ $tab_help = array(
 		</div>
 
 		<p class="description">
-			<?php esc_html_e( 'State reflects this plugin\'s own automatic recognition -- Unknown, one of three known-vendor categories, or Loopback -- refreshed on every request, unless an administrator\'s own decision (Authorised, Denied, or Authorisation expired) already occupies that row; a decision always wins and is never silently overwritten by new automatic traffic from the same source. Classification adds a further judgement computed fresh on every page load, purely for display -- nothing it produces is written back to the database, which is also why, unlike State, it has no sort or filter of its own here.', 'vcns-security-automation-manager' ); ?>
+			<?php esc_html_e( 'State reflects this plugin\'s own automatic recognition -- Unknown, one of three known-vendor categories, or This server or private network -- refreshed on every request, unless an administrator\'s own decision (Authorised, Denied, or Authorisation expired) already occupies that row; a decision always wins and is never silently overwritten by new automatic traffic from the same source. Classification adds a further judgement computed fresh on every page load, purely for display -- nothing it produces is written back to the database, which is also why, unlike State, it has no sort or filter of its own here.', 'vcns-security-automation-manager' ); ?>
 		</p>
 
 		<p class="description">
@@ -577,7 +577,7 @@ $tab_help = array(
 				<td class="wp-sam-col-datetime"><?php echo esc_html( (string) $row['last_seen_at'] ); ?></td>
 				<td class="wp-sam-col-actions">
 					<?php if ( 'loopback' === $state ) : ?>
-						<span class="description wp-sam-auto-authorised" title="<?php esc_attr_e( 'This server calling itself is treated as authorised automatically. If a reverse proxy on this site terminates every visitor connection via loopback, deny it below to override that.', 'vcns-security-automation-manager' ); ?>"><?php esc_html_e( 'Auto-authorised (loopback)', 'vcns-security-automation-manager' ); ?></span>
+						<span class="description wp-sam-auto-authorised" title="<?php esc_attr_e( 'Requests from this server or its private network (127.x, 10.x, 172.16-31.x, 192.168.x and the IPv6 equivalents) are treated as authorised automatically and never blocked automatically. If every visitor appears to come from one of these addresses (a reverse proxy that does not pass on the real client address), deny it below to override that.', 'vcns-security-automation-manager' ); ?>"><?php esc_html_e( 'Auto-authorised (this server or private network)', 'vcns-security-automation-manager' ); ?></span>
 						<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin-top:4px">
 							<?php wp_nonce_field( 'wp_sam_scanner_identity_decide' ); ?>
 							<input type="hidden" name="action" value="wp_sam_scanner_identity_decide" />
