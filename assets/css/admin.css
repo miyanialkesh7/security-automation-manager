@@ -130,7 +130,7 @@
 	border: 1px solid #dcdcde;
 }
 
-/* Settings/Overview status badges. Rendered by WP_SAM\Admin\Status_Badge --
+/* Settings → All status badges. Rendered by WP_SAM\Admin\Status_Badge --
    the Layer 4/Layer 5 pillar tables' cross-pillar status vocabulary.
    Colour values mirror .mode-report-only/.mode-enforce/.wp-sam-readiness-badge
    above for visual consistency, but this is a deliberately separate class

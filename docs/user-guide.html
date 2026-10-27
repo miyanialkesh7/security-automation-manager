@@ -126,7 +126,7 @@
       <section id='home-experience' class='section'>
         <p class='section-label'>Your Home page</p>
         <h2>The scorecard, Recent Activity, Protection Status, and Action Centre.</h2>
-        <p><strong>Security Automation Manager -&gt; Settings</strong> (the default landing page) now leads with four things, shown above the Overview/Getting Started/Security Health/Action Centre/Recommendations tab bar described throughout the rest of this guide. None of it is new evidence or a new decision -- it's the same evidence you'd otherwise find scattered across those tabs, brought to the front and explained in plain language.</p>
+        <p><strong>Security Automation Manager -&gt; Settings</strong> (the default landing page) now leads with four things, shown above the Overview/All/Getting Started/Security Health/Action Centre/Recommendations tab bar described throughout the rest of this guide. None of it is new evidence or a new decision -- it's the same evidence you'd otherwise find scattered across those tabs, brought to the front and explained in plain language. The Overview tab shows only this summary; the detailed per-layer, per-pillar status tables, each row with a "Manage" link, are on the <strong>All</strong> tab (<strong>Settings -&gt; All</strong>).</p>
 
         <h3>The Security Scorecard</h3>
         <p>Three clickable tiles answer "how is my site doing?" with factual counts, not a synthetic score out of 100:</p>
@@ -214,8 +214,8 @@
           </div>
         </div>
         <figure class='screenshot'>
-          <img src='images/sam-overview.png' alt='WordPress admin screenshot of the Security Automation Manager Overview tab, showing per-surface status for every pillar and content-rewrite protection, with a Manage link to each one. Captured before the 2.10.0 Home experience (Welcome page, scorecard, Protection Status, Action Centre) shipped, so it does not show those.' loading='lazy'>
-          <figcaption>The Overview tab (<strong>Security Automation Manager -> Settings</strong>), reached below the scorecard and Protection Status described in <a href='#home-experience'>Your Home page</a> -- still the detailed, per-pillar status view, with a "Manage" link to each one. <em>This screenshot predates 2.10.0's Home experience and is pending a refresh; see <a href='#home-experience'>Your Home page</a> for what actually appears above it now.</em></figcaption>
+          <img src='images/sam-overview.png' alt='WordPress admin screenshot of the per-pillar status tables, now on the Security Automation Manager Settings page All tab, showing per-surface status for every pillar and content-rewrite protection, with a Manage link to each one. Captured before the 2.10.0 Home experience (Welcome page, scorecard, Protection Status, Action Centre) shipped, so it does not show those.' loading='lazy'>
+          <figcaption>The All tab (<strong>Security Automation Manager -> Settings -> All</strong>) -- the detailed, per-pillar status view, with a "Manage" link to each one. It used to sit below the scorecard and Protection Status on the Overview tab; the Overview tab now shows only the summary described in <a href='#home-experience'>Your Home page</a>. <em>This screenshot predates 2.10.0's Home experience and is pending a refresh.</em></figcaption>
         </figure>
       </section>
 
@@ -238,7 +238,9 @@ flowchart TD
     Settings -.->|"Personal Preferences link"| Welcome
     Settings -.->|"Needs Attention tile / Action Centre tab"| ActionCentre["Action Centre<br/><small>tab on Settings -- consolidates Recommendations<br/>+ CSP review queue + dependency review</small>"]
 
-    Settings -.->|"Manage CSP"| CSP["CSP<br/><small>tabbed dashboard -- not in the sidebar</small>"]
+    Settings -.->|"All tab"| AllTab["All<br/><small>tab on Settings -- every layer and pillar,<br/>with a Manage link per row</small>"]
+
+    AllTab -.->|"Manage CSP"| CSP["CSP<br/><small>tabbed dashboard -- not in the sidebar</small>"]
     CSP --> T1["Start Here"]
     CSP --> T2["Profiles"]
     CSP --> T3["For Review"]
@@ -248,11 +250,11 @@ flowchart TD
     CSP --> T6["Scan Log"]
     CSP --> T7["Settings"]
 
-    Settings -.->|"one Manage link per row"| Pillars["11 simple header pillars -- not in the sidebar<br/><small>X-Frame-Options · X-Content-Type-Options · Referrer-Policy<br/>Permissions-Policy · Strict-Transport-Security · Cache-Control<br/>Information Masking · Cross-Origin-Resource-Policy<br/>Cross-Origin-Opener-Policy · Cross-Origin-Embedder-Policy<br/>X-Permitted-Cross-Domain-Policies</small>"]
+    AllTab -.->|"one Manage link per row"| Pillars["11 simple header pillars -- not in the sidebar<br/><small>X-Frame-Options · X-Content-Type-Options · Referrer-Policy<br/>Permissions-Policy · Strict-Transport-Security · Cache-Control<br/>Information Masking · Cross-Origin-Resource-Policy<br/>Cross-Origin-Opener-Policy · Cross-Origin-Embedder-Policy<br/>X-Permitted-Cross-Domain-Policies</small>"]
 
-    Settings -.->|"Manage"| RTScr["Reverse Tabnabbing, Scripts -- not in the sidebar<br/><small>see Content rewrite protections below</small>"]
+    AllTab -.->|"Manage"| RTScr["Reverse Tabnabbing, Scripts -- not in the sidebar<br/><small>see Content rewrite protections below</small>"]
 
-    Settings -.->|"Manage"| Certs["Certificates -- not in the sidebar"]
+    AllTab -.->|"Manage"| Certs["Certificates -- not in the sidebar"]
 
     Observe -.-> ContInt["Continuous Intelligence<br/><small>not in the sidebar -- not yet covered in this guide</small>"]
     Control -.-> Traffic["Traffic Controls<br/><small>not in the sidebar -- not yet covered in this guide</small>"]
@@ -264,7 +266,7 @@ flowchart TD
     Verify -.->|"Change Windows"| AdvInt
           </div>
         </div>
-        <p class='section-note'>The real WordPress admin menu, for orientation. Only <strong>Settings</strong>, <strong>Observe</strong>, <strong>Decide</strong>, <strong>Control</strong>, and <strong>Verify</strong> appear in the left-hand sidebar. Every other page this plugin registers -- CSP, every header pillar, Certificates, Advanced Intelligence, Welcome / Personal Preferences, and more -- is deliberately hidden from the sidebar and reached only by clicking a link from <strong>Settings</strong> (a "Manage" link from the Overview tab, the "Personal Preferences" link, or the Action Centre tab) or a task-relevant link from Observe/Decide/Control/Verify, never by finding it in the menu directly. Every hidden page still works by direct URL if you already know its slug. Reverse Tabnabbing and Scripts aren't <em>header</em> pillars, but they share the same hidden-page mechanism -- see <a href='#content-rewrites'>Content rewrite protections</a> below.</p>
+        <p class='section-note'>The real WordPress admin menu, for orientation. Only <strong>Settings</strong>, <strong>Observe</strong>, <strong>Decide</strong>, <strong>Control</strong>, and <strong>Verify</strong> appear in the left-hand sidebar. Every other page this plugin registers -- CSP, every header pillar, Certificates, Advanced Intelligence, Welcome / Personal Preferences, and more -- is deliberately hidden from the sidebar and reached only by clicking a link from <strong>Settings</strong> (a "Manage" link from the All tab, the "Personal Preferences" link, or the Action Centre tab) or a task-relevant link from Observe/Decide/Control/Verify, never by finding it in the menu directly. Every hidden page still works by direct URL if you already know its slug. Reverse Tabnabbing and Scripts aren't <em>header</em> pillars, but they share the same hidden-page mechanism -- see <a href='#content-rewrites'>Content rewrite protections</a> below.</p>
         <div class='card-grid'>
           <article class='card'>
             <h3>1. Initialise safely</h3>

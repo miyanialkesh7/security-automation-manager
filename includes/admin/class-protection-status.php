@@ -59,7 +59,7 @@ class Protection_Status {
 		);
 	}
 
-	/** Reads csp_policy_profiles.mode per CSP surface (Csp_Surfaces -- an older install's 'api' row is ignored) -- the same query and mode vocabulary (disabled/report-only/enforce) already used by page-overview.php's own Overview tab. */
+	/** Reads csp_policy_profiles.mode per CSP surface (Csp_Surfaces -- an older install's 'api' row is ignored) -- the same query and mode vocabulary (disabled/report-only/enforce) already used by page-overview.php's own All tab. */
 	private function browser_content_area(): array {
 		global $wpdb;
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Csp_Surfaces::sql_list() is a hard-coded constant list, not input.
