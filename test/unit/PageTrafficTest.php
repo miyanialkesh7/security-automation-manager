@@ -252,6 +252,34 @@ class PageTrafficTest extends TestCase {
 		unset( $_GET['tab'], $_GET['subtab'] );
 
 		$this->assertMatchesRegularExpression( '/value="CN"\s+checked/', $output );
+		$this->assertMatchesRegularExpression( '/id="wp-sam-country-count"[^>]*>1</', $output );
+	}
+
+	public function test_geoip_subtab_renders_the_select_by_group_control_without_posting_it(): void {
+		$_GET['tab']    = 'network-intelligence';
+		$_GET['subtab'] = 'geoip';
+		$GLOBALS['_wpdb_get_results'] = array();
+
+		ob_start();
+		require WP_SAM_DIR . 'includes/admin/views/page-traffic.php';
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['tab'], $_GET['subtab'] );
+
+		$this->assertStringContainsString( 'Select by group', $output );
+		$this->assertStringContainsString( '<label for="wp-sam-country-group-select">', $output );
+		// No name attribute: the group choice is never submitted.
+		$this->assertStringContainsString( '<select id="wp-sam-country-group-select" aria-describedby="wp-sam-country-group-details">', $output );
+		$this->assertStringContainsString( '<optgroup label="Continents (UN M49 regions)">', $output );
+		$this->assertStringContainsString( '<optgroup label="Sanctions (snapshot)">', $output );
+		$this->assertStringContainsString( 'value="eu" data-codes="AT BE BG', $output );
+		$this->assertStringContainsString( 'Tick all in group', $output );
+		$this->assertStringContainsString( 'Untick all in group', $output );
+		$this->assertStringContainsString( 'data-wp-sam-country-group-details="uk-sanctions" hidden', $output );
+		$this->assertStringContainsString( 'not in itself a requirement to block all traffic', $output );
+		$this->assertStringContainsString( 'never updated automatically', $output );
+		$this->assertMatchesRegularExpression( '/id="wp-sam-country-count"[^>]*>0</', $output );
+		$this->assertStringContainsString( 'id="wp-sam-country-grid"', $output );
 	}
 
 	public function test_geoip_subtab_shows_the_lockout_warning_from_a_pending_transient(): void {

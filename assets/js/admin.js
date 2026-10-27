@@ -568,4 +568,57 @@
 			} );
 		} );
 	} );
+
+	// Control → Traffic Controls → Network Intelligence → Geo-IP: "Select
+	// by group" on the Country Block List. A selection aid only -- it ticks
+	// or unticks the grid's own blocked_countries[] checkboxes and never
+	// submits anything; the existing Save button (and its server-side
+	// self-lockout check) is still the only way a change is applied.
+	( function () {
+		const $groups = $( '#wp-sam-country-groups' );
+		const $grid   = $( '#wp-sam-country-grid' );
+		if ( ! $groups.length || ! $grid.length ) {
+			return;
+		}
+
+		const $select  = $( '#wp-sam-country-group-select' );
+		const $buttons = $groups.find( '[data-wp-sam-country-group-action]' );
+		const $count   = $( '#wp-sam-country-count' );
+		const $boxes   = $grid.find( 'input[type="checkbox"][name="blocked_countries[]"]' );
+
+		function updateCount() {
+			$count.text( $boxes.filter( ':checked' ).length );
+		}
+
+		function showSelectedGroup() {
+			const key = $select.val();
+			$groups.find( '[data-wp-sam-country-group-details]' ).prop( 'hidden', true );
+			$buttons.prop( 'disabled', ! key );
+			if ( key ) {
+				$groups.find( '[data-wp-sam-country-group-details]' ).filter( function () {
+					return $( this ).attr( 'data-wp-sam-country-group-details' ) === key;
+				} ).prop( 'hidden', false );
+			}
+		}
+
+		$select.on( 'change', showSelectedGroup );
+
+		$buttons.on( 'click', function () {
+			const codes = String( $select.find( 'option:selected' ).attr( 'data-codes' ) || '' ).split( ' ' ).filter( Boolean );
+			if ( ! codes.length ) {
+				return;
+			}
+			const tick = 'tick' === $( this ).attr( 'data-wp-sam-country-group-action' );
+			$boxes.each( function () {
+				if ( -1 !== codes.indexOf( this.value ) ) {
+					this.checked = tick;
+				}
+			} );
+			updateCount();
+		} );
+
+		$boxes.on( 'change', updateCount );
+		showSelectedGroup();
+		updateCount();
+	}() );
 } )( jQuery );
