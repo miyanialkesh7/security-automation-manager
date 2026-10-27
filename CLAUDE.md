@@ -43,7 +43,8 @@ Taken from `includes/admin/views/page-{observe,decide,control,verify}.php` and `
 | Decoy paths | Control → Honey Paths | `security-automation-manager-advanced&tab=honeypaths` |
 | File/theme/plugin drift | Verify → Baseline & Drift | `security-automation-manager-baseline` |
 | Declared change windows and what drifted during them | Verify → Change Windows | `security-automation-manager-advanced&tab=change-windows` |
-| Header pillars (HSTS, X-Frame-Options, …), Reverse Tabnabbing | Settings → that pillar's row → Manage | the `page` in `Admin\Pillar_Registry` |
+| Every layer and pillar with its status (the per-layer tables) | Settings → All | `security-automation-manager&tab=all` |
+| Header pillars (HSTS, X-Frame-Options, …), Reverse Tabnabbing | Settings → All → that pillar's row → Manage | `security-automation-manager&tab=all`, whose Manage link opens the `page` in `Admin\Pillar_Registry` |
 | Rollback, configuration export/import | Settings → Recovery | `security-automation-manager&tab=recovery` |
 
 ## Other conventions that have caught agents out

@@ -5,8 +5,8 @@
  * Registers a top-level "Security Automation Manager" menu. Per
  * .roadmap/phase3_early_plan.md §6.1, the visible left-nav leads with five
  * entries matching the product's operational lifecycle:
- *   - security-automation-manager          – Settings (§6.2 -- was "Overview"): per-pillar status
- *      summary, plus Readiness, Recovery, Updates, and About tabs. Registered FIRST (not last,
+ *   - security-automation-manager          – Settings (§6.2 -- was "Overview"): home summary
+ *      (Overview tab), per-pillar status (All tab), plus Readiness, Recovery, Updates, and About tabs. Registered FIRST (not last,
  *      despite the roadmap listing it last in prose) -- WordPress's own add_submenu_page() auto-
  *      inserts an extra "link back to parent" item, labelled with the top-level menu's own
  *      title, the first time a DIFFERENT slug is registered while $submenu[parent] is still

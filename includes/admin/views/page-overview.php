@@ -1,8 +1,10 @@
 <?php
 /**
  * Admin view: Security Automation Manager overview.
- * Landing page for the top-level menu. Tabs: Overview (per-pillar status
- * summary, the default), Getting Started (a suggested-order setup checklist
+ * Landing page for the top-level menu. Tabs: Overview (the home summary --
+ * scorecard, recent activity, Protection Status and Action Centre preview;
+ * the default), All (every layer and pillar with its per-surface status and
+ * a Manage link to each one), Getting Started (a suggested-order setup checklist
  * for a new install, live status per step, Phase 4G), Security Health (a
  * plain-language outcomes summary plus evidence export), Readiness
  * (plugin-specific schema/runtime checks only), Recovery (schema-downgrade
@@ -41,7 +43,7 @@ global $wpdb;
 
 // Current tab.
 $tab          = isset( $_GET['tab'] ) ? sanitize_text_field( wp_unslash( $_GET['tab'] ) ) : 'overview';
-$allowed_tabs = array( 'overview', 'getting-started', 'health', 'action-centre', 'recommendations', 'readiness', 'recovery', 'exceptions', 'updates', 'about' );
+$allowed_tabs = array( 'overview', 'all', 'getting-started', 'health', 'action-centre', 'recommendations', 'readiness', 'recovery', 'exceptions', 'updates', 'about' );
 if ( ! in_array( $tab, $allowed_tabs, true ) ) {
 	$tab = 'overview';
 }
@@ -50,7 +52,11 @@ $base_url = admin_url( 'admin.php?page=security-automation-manager' );
 $tab_help = array(
 	'overview'        => array(
 		'label'       => __( 'Overview', 'vcns-security-automation-manager' ),
-		'description' => __( 'At-a-glance status for every pillar this plugin manages, and a link to configure each one.', 'vcns-security-automation-manager' ),
+		'description' => __( 'A summary of your site\'s security: the scorecard, recent activity, protection status, and anything that needs your attention.', 'vcns-security-automation-manager' ),
+	),
+	'all'             => array(
+		'label'       => __( 'All', 'vcns-security-automation-manager' ),
+		'description' => __( 'Every layer and pillar SAM manages, with its current status and a link to configure each one.', 'vcns-security-automation-manager' ),
 	),
 	'getting-started' => array(
 		'label'       => __( 'Getting Started', 'vcns-security-automation-manager' ),
@@ -107,15 +113,14 @@ if ( 'action-centre' === $tab ) {
 }
 
 // ── Overview tab data ────────────────────────────────────────────────────────
-// Scoped to the Overview tab only -- Pillar_Registry::fetch_rows() and the
-// Certificate_Store/Certificate_Manager calls below have no reason to run
-// when e.g. the Updates or Recovery tab is what's actually being rendered.
+// Scoped to the Overview tab only -- the home summary's own queries have no
+// reason to run when another tab is what's actually being rendered.
 if ( 'overview' === $tab ) {
 	// Customer-Centred Administration Experience: scorecard, recent
 	// activity, outcome-oriented protection status, and the Action Centre
-	// preview -- rendered above the existing per-layer tables below, whose
-	// technical detail remains exactly as it was (spec §13.7: existing
-	// specialist views stay available, nothing here replaces them).
+	// preview. The per-layer tables live on the All tab, whose technical
+	// detail remains exactly as it was (spec §13.7: existing specialist
+	// views stay available, nothing here replaces them).
 	$wp_sam_home_prefs        = Presentation_Preferences::get_for_user();
 	$wp_sam_scorecard_counts  = ( new Security_Scorecard() )->counts();
 	$wp_sam_activity_metrics  = ( new Recent_Activity() )->metrics();
@@ -150,7 +155,13 @@ if ( 'overview' === $tab ) {
 	} else {
 		$wp_sam_home_section_order = array( 'action', 'activity', 'protection' );
 	}
+}
 
+// ── All tab data ─────────────────────────────────────────────────────────────
+// Scoped to the All tab only -- Pillar_Registry::fetch_rows() and the
+// Certificate_Store/Certificate_Manager calls below have no reason to run
+// when e.g. the Overview or Recovery tab is what's actually being rendered.
+if ( 'all' === $tab ) {
 	// Every site surface, for the non-CSP pillar rows below -- they still
 	// apply to the REST API. CSP's own rows use $csp_surfaces instead, which
 	// leaves 'api' out (see Csp_Surfaces).
@@ -224,7 +235,7 @@ if ( 'overview' === $tab ) {
 // Each step's "done" signal reuses the same stores the relevant page itself
 // reads from -- nothing new is computed or persisted here, and nothing on
 // this tab changes what those stores actually decide (Observe/Enforce,
-// enabled/disabled). This is read-only status, same as the Overview tab
+// enabled/disabled). This is read-only status, same as the All tab
 // above; there is no dismiss/hide state to persist, so the checklist simply
 // reflects live configuration on every page load.
 if ( 'getting-started' === $tab ) {
@@ -315,7 +326,7 @@ $rollback_snapshots = Rollback_Guard::list_snapshots();
 		<?php echo esc_html( $tab_help[ $tab ]['description'] ); ?>
 	</div>
 
-	<?php if ( 'overview' === $tab ) : ?>
+	<?php if ( 'all' === $tab ) : ?>
 
 	<p>
 		<?php esc_html_e( "Everything below is organised into five layers, roughly ordered from foundational to visible: whether the plugin itself is healthy, how much it's trusted to act on your behalf, what it's watching for right now, what it tells visitors' browsers to do, and whether the connection to your site can be trusted in the first place. A problem in an earlier layer can undermine every layer listed after it -- if something here looks wrong, it's usually worth checking the layers above it first.", 'vcns-security-automation-manager' ); ?>
@@ -607,15 +618,15 @@ $rollback_snapshots = Rollback_Guard::list_snapshots();
 				<td class="wp-sam-col-primary">
 					<strong><?php esc_html_e( '2. Turn on the other header pillars', 'vcns-security-automation-manager' ); ?></strong>
 					<p class="description" style="margin:0.3em 0 0;">
-						<?php esc_html_e( 'Fourteen further headers, each an independent on/off switch per surface. Unlike CSP, most need no learning period, so most are safe to switch on straight away -- see the Layer 4 table on the Overview tab for the full list and current status of each.', 'vcns-security-automation-manager' ); ?>
+						<?php esc_html_e( 'Fourteen further headers, each an independent on/off switch per surface. Unlike CSP, most need no learning period, so most are safe to switch on straight away -- see the Layer 4 table on the All tab for the full list and current status of each.', 'vcns-security-automation-manager' ); ?>
 					</p>
 				</td>
 				<td class="wp-sam-col-status">
 					<?php echo Status_Badge::render( $gs_any_pillar_on ? Status_Badge::STATE_ACTIVE : Status_Badge::STATE_NOT_CONFIGURED, $gs_any_pillar_on ? __( 'At least one enabled', 'vcns-security-automation-manager' ) : __( 'None enabled yet', 'vcns-security-automation-manager' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Status_Badge::render() returns pre-escaped HTML. ?>
 				</td>
 				<td class="wp-sam-col-actions">
-					<a href="<?php echo esc_url( add_query_arg( 'tab', 'overview', $base_url ) ); ?>">
-						<?php esc_html_e( 'Overview -- Layer 4', 'vcns-security-automation-manager' ); ?>
+					<a href="<?php echo esc_url( add_query_arg( 'tab', 'all', $base_url ) ); ?>">
+						<?php esc_html_e( 'All -- Layer 4', 'vcns-security-automation-manager' ); ?>
 					</a>
 				</td>
 			</tr>
@@ -1549,7 +1560,7 @@ $rollback_snapshots = Rollback_Guard::list_snapshots();
 
 	<?php endif; ?>
 
-	<?php else /* about */ : ?>
+	<?php elseif ( 'about' === $tab ) : ?>
 
 	<div class="wp-sam-about" style="margin-top: 1em;">
 		<p>
