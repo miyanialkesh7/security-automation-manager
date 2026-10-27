@@ -192,6 +192,17 @@ class PageOverviewTest extends TestCase {
 		$this->assertStringNotContainsString( 'wp-sam-about', $output );
 	}
 
+	/**
+	 * The five layer tables share one fixed column layout (admin.css,
+	 * .wp-sam-layer-table) so their Area/Status/Manage columns line up
+	 * down the page instead of each sizing itself from its own content.
+	 */
+	public function test_all_tab_layer_tables_share_the_fixed_layer_layout(): void {
+		$output = $this->render_tab( 'all' );
+
+		$this->assertSame( 5, substr_count( $output, 'wp-sam-layer-table' ) );
+	}
+
 	public function test_tab_bar_lists_all_right_after_overview(): void {
 		$GLOBALS['_wpdb_get_var']     = 0;
 		$GLOBALS['_wpdb_get_results'] = array();

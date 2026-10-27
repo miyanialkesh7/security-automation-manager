@@ -337,7 +337,7 @@ $rollback_snapshots = Rollback_Guard::list_snapshots();
 		<?php esc_html_e( "This is a check on the plugin itself, not on your site. It confirms the database matches what the running code expects, the environment meets requirements, and no schema rollback is stuck half-finished. Treat every other layer's status with suspicion until a Fail here is resolved -- they all read from the same tables this layer is verifying.", 'vcns-security-automation-manager' ); ?>
 	</p>
 	<div class="wp-sam-table-wrap">
-	<table class="widefat striped wp-sam-readiness-table wp-sam-table">
+	<table class="widefat striped wp-sam-readiness-table wp-sam-table wp-sam-layer-table">
 		<thead>
 			<tr>
 				<th class="wp-sam-col-primary"><?php esc_html_e( 'Area', 'vcns-security-automation-manager' ); ?></th>
@@ -405,7 +405,7 @@ $rollback_snapshots = Rollback_Guard::list_snapshots();
 		<?php esc_html_e( 'Writing a Content Security Policy by hand means listing every script, style, and font your site is allowed to load -- get it wrong and you either break the site or leave a gap wide open. Deterministic automation builds that list for you from what your site is actually running (its active theme, plugins, and known integrations), worked out separately for each surface below, so a strict policy can exist here without you writing it line by line.', 'vcns-security-automation-manager' ); ?>
 	</p>
 	<div class="wp-sam-table-wrap">
-	<table class="widefat striped wp-sam-readiness-table wp-sam-table">
+	<table class="widefat striped wp-sam-readiness-table wp-sam-table wp-sam-layer-table">
 		<thead>
 			<tr>
 				<th class="wp-sam-col-primary"><?php esc_html_e( 'Area', 'vcns-security-automation-manager' ); ?></th>
@@ -437,7 +437,7 @@ $rollback_snapshots = Rollback_Guard::list_snapshots();
 		<?php esc_html_e( 'Every request your site receives passes through a set of pattern-matching detectors that recognise the signature of common attacks -- SQL injection attempts, path traversal, malicious bots, and more. Each detector can simply watch and record evidence, or actively block, entirely under your control from Control → Traffic Controls → Detectors; the row below just shows how many are switched on right now.', 'vcns-security-automation-manager' ); ?>
 	</p>
 	<div class="wp-sam-table-wrap">
-	<table class="widefat striped wp-sam-readiness-table wp-sam-table">
+	<table class="widefat striped wp-sam-readiness-table wp-sam-table wp-sam-layer-table">
 		<thead>
 			<tr>
 				<th class="wp-sam-col-primary"><?php esc_html_e( 'Area', 'vcns-security-automation-manager' ); ?></th>
@@ -486,7 +486,7 @@ $rollback_snapshots = Rollback_Guard::list_snapshots();
 		<?php esc_html_e( "These are instructions sent to every visitor's browser, telling it how to defend your site on their end -- for example, refusing to run a script you haven't approved, or refusing to let another site frame your pages inside a hidden iframe for a clickjacking attack. Content Security Policy is the most capable of these; the rest are narrower, single-purpose headers. Most can run in report-only mode first, so you can see what would have been blocked before anything actually is.", 'vcns-security-automation-manager' ); ?>
 	</p>
 	<div class="wp-sam-table-wrap">
-	<table class="widefat striped wp-sam-readiness-table wp-sam-table">
+	<table class="widefat striped wp-sam-readiness-table wp-sam-table wp-sam-layer-table">
 		<thead>
 			<tr>
 				<th class="wp-sam-col-primary"><?php esc_html_e( 'Pillar', 'vcns-security-automation-manager' ); ?></th>
@@ -553,7 +553,7 @@ $rollback_snapshots = Rollback_Guard::list_snapshots();
 		<?php esc_html_e( 'Every layer above assumes visitors reach your site over a trusted, encrypted connection -- this is where that trust comes from. If a TLS certificate expires or was never issued, browsers show visitors a warning page before any of your other protections get a chance to matter.', 'vcns-security-automation-manager' ); ?>
 	</p>
 	<div class="wp-sam-table-wrap">
-	<table class="widefat striped wp-sam-readiness-table wp-sam-table">
+	<table class="widefat striped wp-sam-readiness-table wp-sam-table wp-sam-layer-table">
 		<thead>
 			<tr>
 				<th class="wp-sam-col-primary"><?php esc_html_e( 'Pillar', 'vcns-security-automation-manager' ); ?></th>

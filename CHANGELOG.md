@@ -35,6 +35,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 ### Changed
 
 - **Settings opens on a summary-only Overview** (scorecard, recent activity, Protection Status, Action Centre). The Layer 1–5 tables have moved, unchanged, to a new Settings → All tab. Getting Started, Control → "Every header & content policy", the docs and `CLAUDE.md`'s route table now point there.
+- **The Settings → All layer tables share one column layout** (`.wp-sam-layer-table`: fixed layout, Area 26% / Status 52% / Manage 22%). Before, each of the five tables sized its own columns from its content, so they never lined up, and Layer 2 and 4's per-surface badges were held on one line by `nowrap`. Badges now wrap with even spacing, and below 782px the tables fall back to auto layout.
 - The Dependency Classification notice no longer claims hashes are never computed by fetching the remote URL.
 - `readme.txt`'s External services section now discloses the daily pinned-file check.
 

@@ -807,3 +807,60 @@ details.wp-sam-filter-form form {
 	width: 1%;
 	white-space: nowrap;
 }
+
+/* ── Settings → All: the Layer 1–5 tables ───────────────────────────────────
+ *
+ * Five short tables stacked down one page, each with the same three
+ * columns. Under the auto layout every other SAM table uses, each sized
+ * its columns from its own content -- Layer 2 and 4's Status cells hold a
+ * row of per-surface badges that `nowrap` kept on one line -- so no two
+ * layers' columns lined up. A fixed layout with shared widths makes every
+ * layer read as one continuous table, and lets the badges wrap.
+ */
+.wp-sam-layer-table {
+	table-layout: fixed;
+	width: 100%;
+}
+
+.wp-sam-layer-table th,
+.wp-sam-layer-table td {
+	padding: 10px 12px;
+	vertical-align: middle;
+}
+
+.wp-sam-layer-table .wp-sam-col-primary {
+	width: 26%;
+	min-width: 0;
+}
+
+.wp-sam-layer-table .wp-sam-col-status {
+	width: 52%;
+	white-space: normal;
+	line-height: 1.9;
+}
+
+.wp-sam-layer-table .wp-sam-col-actions {
+	width: 22%;
+	white-space: normal;
+	overflow-wrap: break-word;
+}
+
+.wp-sam-layer-table .wp-sam-col-status .wp-sam-status-badge,
+.wp-sam-layer-table .wp-sam-col-status .wp-sam-readiness-badge {
+	margin: 2px 6px 2px 0;
+	white-space: nowrap;
+}
+
+/* Below this width the fixed shares get too narrow for the badge rows;
+ * fall back to the auto layout and let .wp-sam-table-wrap scroll. */
+@media screen and (max-width: 782px) {
+	.wp-sam-layer-table {
+		table-layout: auto;
+	}
+
+	.wp-sam-layer-table .wp-sam-col-primary,
+	.wp-sam-layer-table .wp-sam-col-status,
+	.wp-sam-layer-table .wp-sam-col-actions {
+		width: auto;
+	}
+}
