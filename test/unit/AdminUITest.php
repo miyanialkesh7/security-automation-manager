@@ -481,6 +481,56 @@ class AdminUITest extends TestCase {
 		$this->assertStringContainsString( 'Page 3 of 3', $output );
 	}
 
+	public function test_scripts_external_shows_drift_banner_with_both_hashes_and_actions(): void {
+		$_GET['tab'] = 'external';
+		$GLOBALS['_wpdb_get_var']           = 1;
+		$row                                = $this->dependency_inventory_rows( 1 )[0];
+		$row['classification']              = 'immutable_pinned';
+		$row['expected_sri']                = 'sha384-pinnedOLD';
+		$row['pinned_url']                  = 'https://cdn1.example.test/lib.js';
+		$row['drift_detected_at']           = '2026-10-20 02:00:00';
+		$row['drift_observed_sri']          = 'sha384-servedNEW';
+		$GLOBALS['_wpdb_get_results_queue'] = array( array(), array( $row ) );
+
+		ob_start();
+		require WP_SAM_DIR . 'includes/admin/views/page-scripts.php';
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['tab'] );
+
+		$this->assertStringContainsString( 'This file has changed at its source.', $output );
+		$this->assertStringContainsString( '2026-10-20 02:00:00', $output );
+		$this->assertStringContainsString( 'sha384-pinnedOLD', $output );
+		$this->assertStringContainsString( 'data-value="sha384-servedNEW"', $output );
+		$this->assertStringContainsString( 'wp-sam-dependency-reapprove', $output );
+		$this->assertStringContainsString( 'Allow by host instead', $output );
+		$this->assertStringContainsString( 'integrity attribute in the theme or plugin markup', $output );
+		// Drifted rows sort first so the recommendation's link lands on them.
+		$this->assertStringContainsString( "ORDER BY ( classification = 'immutable_pinned' AND drift_detected_at IS NOT NULL ) DESC", (string) $GLOBALS['_wpdb_last_get_results_query'] );
+	}
+
+	public function test_scripts_external_badges_a_known_vendor_with_its_reason(): void {
+		$_GET['tab'] = 'external';
+		$GLOBALS['_wpdb_get_var']           = 1;
+		$row                                = $this->dependency_inventory_rows( 1 )[0];
+		$row['origin']                      = 'https://www.google.com';
+		$row['last_seen_url']               = 'https://www.google.com/recaptcha/api.js';
+		$row['classification']              = 'immutable_pinned';
+		$row['expected_sri']                = 'sha384-abc';
+		$GLOBALS['_wpdb_get_results_queue'] = array( array(), array( $row ) );
+
+		ob_start();
+		require WP_SAM_DIR . 'includes/admin/views/page-scripts.php';
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['tab'] );
+
+		$this->assertStringContainsString( 'Known vendor: Google reCAPTCHA -- allowed by host, not hash', $output );
+		$this->assertStringContainsString( 'release-specific script', $output );
+		$this->assertStringContainsString( 'Consider &quot;Approved -- mutable provider&quot; instead', $output );
+		$this->assertStringNotContainsString( 'never one computed by fetching the remote URL', $output );
+	}
+
 	public function test_scripts_external_filter_survives_page_change(): void {
 		$_GET['tab']        = 'external';
 		$_GET['ext_origin'] = 'gstatic.com';
@@ -824,6 +874,7 @@ class AdminUITest extends TestCase {
 	public static function notice_action_links(): array {
 		return array(
 			'SRI mismatch -> External Scripts'   => array( 'dependency_integrity_monitor', 'sri_mismatch', 'admin.php?page=security-automation-manager-scripts&tab=external' ),
+			'pinned hash drift -> Dependencies'  => array( 'dependency_integrity_monitor', 'pinned_hash_drift', 'admin.php?page=security-automation-manager-scripts&tab=external' ),
 			'discovery -> Scan Log'              => array( 'discovery', 'crawl_http_error', 'admin.php?page=security-automation-manager-dashboard&tab=scan-log' ),
 			'conflict -> Control CSP Profiles'   => array( 'conflict_detector', 'csp_conflict', 'admin.php?page=security-automation-manager-dashboard&tab=profiles' ),
 			'hash budget -> Policy Audit'        => array( 'policy_builder', 'hash_budget_exceeded', 'admin.php?page=security-automation-manager-dashboard&tab=policy-audit' ),

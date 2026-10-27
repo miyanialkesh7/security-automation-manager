@@ -25,6 +25,7 @@ namespace WP_SAM\Intelligence;
 
 use WP_SAM\CSP\Automation_Config;
 use WP_SAM\CSP\Csp_Surfaces;
+use WP_SAM\Security\Pinned_Dependency_Checker;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -230,15 +231,40 @@ final class Security_Health {
 			)
 		);
 
+		// Pinned files whose content no longer matches the approved hash
+		// (Pinned_Dependency_Checker). Already failing for visitors, so it
+		// outranks an unclassified origin.
+		$drifted = Pinned_Dependency_Checker::drifted_count();
+
+		$value = sprintf(
+			/* translators: %d: number of unclassified dependencies */
+			_n( '%d unclassified', '%d unclassified', $unclassified, 'vcns-security-automation-manager' ),
+			$unclassified
+		);
+		if ( $drifted > 0 ) {
+			$value = sprintf(
+				/* translators: 1: number of pinned dependencies whose hash has drifted, 2: "N unclassified" */
+				_n( '%1$d pinned hash drifted, %2$s', '%1$d pinned hashes drifted, %2$s', $drifted, 'vcns-security-automation-manager' ),
+				$drifted,
+				$value
+			);
+		}
+
+		if ( $drifted > 0 ) {
+			$status = 'fail';
+		} elseif ( $unclassified > 0 ) {
+			$status = 'warning';
+		} else {
+			$status = 'pass';
+		}
+
 		return array(
 			'label'  => __( 'Third-party dependencies', 'vcns-security-automation-manager' ),
-			'value'  => sprintf(
-				/* translators: %d: number of unclassified dependencies */
-				_n( '%d unclassified', '%d unclassified', $unclassified, 'vcns-security-automation-manager' ),
-				$unclassified
-			),
-			'status' => $unclassified > 0 ? 'warning' : 'pass',
-			'detail' => __( 'Review each origin under Decide → Dependency Classification to approve, pin, or reject it.', 'vcns-security-automation-manager' ),
+			'value'  => $value,
+			'status' => $status,
+			'detail' => $drifted > 0
+				? __( 'A pinned script or stylesheet has changed at its source, so browsers are refusing it. Review it under Decide → Dependency Classification: re-approve the new hash or allow the origin by host instead.', 'vcns-security-automation-manager' )
+				: __( 'Review each origin under Decide → Dependency Classification to approve, pin, or reject it.', 'vcns-security-automation-manager' ),
 		);
 	}
 

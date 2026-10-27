@@ -185,9 +185,19 @@ class SecurityHealthTest extends TestCase {
 	}
 
 	public function test_dependencies_is_warning_when_some_unclassified(): void {
-		$GLOBALS['_wpdb_get_var'] = 3;
+		$GLOBALS['_wpdb_get_var_queue'] = array( 3, 0 ); // unclassified=3, drifted=0.
 
 		$this->assertSame( 'warning', $this->invoke( 'dependencies_row' )['status'] );
+	}
+
+	public function test_dependencies_fails_when_a_pinned_hash_has_drifted(): void {
+		$GLOBALS['_wpdb_get_var_queue'] = array( 0, 2 ); // unclassified=0, drifted=2.
+
+		$row = $this->invoke( 'dependencies_row' );
+
+		$this->assertSame( 'fail', $row['status'] );
+		$this->assertStringContainsString( '2 pinned hashes drifted', $row['value'] );
+		$this->assertStringContainsString( 'Decide → Dependency Classification', $row['detail'] );
 	}
 
 	// ── exceptions_row() ─────────────────────────────────────────────────────

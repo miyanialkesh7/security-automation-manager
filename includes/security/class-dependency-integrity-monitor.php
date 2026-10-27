@@ -17,6 +17,11 @@
  * only ever come from the site owner's own markup -- so reading it back off
  * this site's own response introduces no third-party trust problem.
  *
+ * What this cannot see is a vendor changing a pinned file in place: the
+ * markup's integrity attribute and expected_sri still agree, so this check
+ * passes while browsers refuse the new content. Pinned_Dependency_Checker
+ * covers that case by re-hashing the file itself.
+ *
  * Scoped to the frontend surface only, matching Conflict_Detector's daily
  * probe: admin/login/api don't have a single representative URL that can be
  * fetched anonymously the way the homepage can.

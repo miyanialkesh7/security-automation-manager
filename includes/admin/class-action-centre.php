@@ -44,6 +44,7 @@ class Action_Centre {
 		'csp_enforce_ready_'            => 'Enabling enforcement means browsers will begin rejecting activity that falls outside the approved policy for this surface.',
 		'pillar_enforce_ready_'         => 'Enabling enforcement means this control becomes active for real traffic on this surface, instead of only being observed.',
 		'detector_disabled_but_firing_' => 'Re-enabling this detector means matching activity is evaluated (and can be acted on) again; it stays silent while disabled.',
+		'dependency_sri_drift_'         => 'Re-approving updates the hash SAM expects, but browsers keep blocking the file until the integrity attribute in the markup that loads it is updated too. Allowing by host instead stops SAM comparing hashes for this origin.',
 	);
 
 	/**
