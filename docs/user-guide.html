@@ -603,7 +603,7 @@ flowchart TD
             </thead>
             <tbody>
               <tr><td>Reverse Tabnabbing</td><td><strong>Security Automation Manager -> Reverse Tabnabbing</strong></td><td>Per surface: on or off. Adds <code>rel="noopener"</code> to any <code>target="_blank"</code> link missing <code>noopener</code>/<code>noreferrer</code>, closing off <code>window.opener</code> access a new tab could otherwise use to redirect the original tab to a phishing page. Purely additive -- it never removes anything or breaks a link.</td></tr>
-              <tr><td>External Scripts</td><td><strong>Security Automation Manager -> Scripts</strong>, External tab</td><td>Per surface: on/off plus Report-only or Enforce mode. Inventories third-party <code>&lt;script&gt;</code>/stylesheet origins from real page loads, lets you classify each one, and supports Subresource Integrity (SRI).</td></tr>
+              <tr><td>External Scripts</td><td><strong>Decide → Dependency Classification</strong></td><td>Per surface: on/off plus Report-only or Enforce mode. Inventories third-party <code>&lt;script&gt;</code>/stylesheet origins from real page loads, lets you classify each one, and supports Subresource Integrity (SRI). Pinned files are re-checked daily, so a vendor update that would make browsers block the file is flagged for you.</td></tr>
               <tr><td>Internal Script Integrity</td><td><strong>Security Automation Manager -> Scripts</strong>, Internal tab</td><td>Per surface: on or off, nothing else to configure. Automatically adds a Subresource Integrity hash to your own theme/plugin/core <code>&lt;script&gt;</code>/stylesheet tags. The hash is read from the exact local file this site is about to serve -- never a network fetch -- and recalculated the next time that file is served after it changes.</td></tr>
             </tbody>
           </table>
@@ -611,8 +611,17 @@ flowchart TD
         <p>External Scripts follows the same report-first shape as CSP: a newly discovered origin is always <strong>Unclassified</strong> -- never blocked by default. Report mode (the default) only builds the inventory. Enforce mode still only ever removes an origin you explicitly marked <strong>Blocked</strong>, or an <strong>Approved -- immutable</strong> origin whose SRI hash no longer matches what the page actually served.</p>
         <div class='callout-stack'>
           <div class='warning-callout'>
-            <h3>This plugin never fabricates an SRI hash</h3>
-            <p>"Approved -- immutable" only ever compares against a hash you paste in yourself -- from a local copy of the file you already trust, or the vendor's own published hash -- never one this plugin computes by fetching the remote URL itself. If a provider's script changes behind a stable URL (common for tag managers, analytics, and similar mutable services), classify it <strong>Approved -- mutable provider</strong> instead; SRI genuinely doesn't apply there.</p>
+            <h3>Nothing is pinned without your click</h3>
+            <p>"Approved -- immutable" compares against a hash you choose: one you paste in (from a local copy of the file you already trust, or the vendor's own published hash), or one the "Suggest" button computes by fetching the exact URL you confirm. A hash this plugin fetches is only ever suggested or compared -- never approved on its own. If a provider's script changes behind a stable URL (common for tag managers, analytics, and similar mutable services), classify it <strong>Approved -- mutable provider</strong> instead; SRI genuinely doesn't apply there. Google Tag Manager, Google Analytics, HubSpot, Cloudflare Turnstile and reCAPTCHA rows carry a <strong>Known vendor</strong> badge saying so, with the reason.</p>
+          </div>
+          <div class='callout'>
+            <h3>When a pinned file changes at its source</h3>
+            <p>Once a day SAM re-fetches each pinned file (the exact URL its hash was taken from, https only, on that row's own origin) and hashes it with the same algorithm as your pinned hash. If the content no longer matches, browsers enforcing the <code>integrity</code> attribute are already refusing to load it. The row shows a red banner with when the change was first seen, the pinned hash and the hash now served, an admin notice links to <strong>Decide → Dependency Classification</strong>, and a high-priority "Pinned script hash has drifted" item appears in the Action Centre. You then choose:</p>
+            <ul>
+              <li><strong>Re-approve new hash</strong> -- only after checking the change is one you expect (for example the vendor's release notes): an unexpected change can also mean the vendor or its CDN was compromised. This updates the hash SAM expects. SAM never adds an <code>integrity</code> attribute to your pages, so you must also change the attribute in the theme or plugin markup that loads the file to the new value (copy it from the banner), or browsers will keep blocking it.</li>
+              <li><strong>Allow by host instead</strong> -- switches the row to Approved -- mutable provider, the right fix for a vendor that changes its files routinely.</li>
+            </ul>
+            <p>If the daily check can't fetch the file (timeout, error status, over 5 MB), the row says so; that is never reported as a change.</p>
           </div>
           <div class='callout'>
             <h3>Deduplication stays at the origin level</h3>
