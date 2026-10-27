@@ -854,6 +854,10 @@ if ( ! class_exists( 'WP_REST_Request' ) ) {
 			$this->params[ $key ] = $value;
 		}
 
+		public function get_param( string $key ): mixed {
+			return $this->params[ $key ] ?? null;
+		}
+
 		public function offsetExists( mixed $offset ): bool {
 			return isset( $this->params[ $offset ] );
 		}

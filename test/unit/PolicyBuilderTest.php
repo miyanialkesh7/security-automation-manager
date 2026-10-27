@@ -95,6 +95,52 @@ class PolicyBuilderTest extends TestCase {
 		$this->assertSame( 1, $builder->emit_calls );
 	}
 
+	/**
+	 * What an ordinary wp-admin page is actually sent, captured through
+	 * send_header() (header() output isn't observable under the CLI SAPI):
+	 * the report-only policy, with a report-uri and report-to that point at
+	 * the admin-hinted endpoint, and a Reporting-Endpoints header declaring
+	 * the same URL for the group report-to names.
+	 */
+	public function test_admin_surface_is_sent_a_policy_with_working_admin_reporting(): void {
+		$builder = new class( $this->gate ) extends Policy_Builder {
+			/** @var string[] */
+			public array $sent = array();
+
+			protected function send_header( string $line ): void {
+				$this->sent[] = $line;
+			}
+		};
+		$profile         = $this->make_profile( [ 'default-src' => [ "'self'" ] ] );
+		$profile['mode'] = 'report-only';
+
+		$method = new ReflectionMethod( $builder, 'emit_profile_header' );
+		$this->assertTrue( $method->invoke( $builder, $profile, 'admin' ) );
+
+		$endpoint = 'https://example.com/wp-json/sam/v1/report?surface=admin';
+		$this->assertSame( 'Reporting-Endpoints: csp-endpoint="' . $endpoint . '"', $builder->sent[0] );
+		$this->assertStringStartsWith( 'Report-To: ', $builder->sent[1] );
+		$this->assertStringContainsString( 'surface=admin', $builder->sent[1] );
+		$this->assertStringStartsWith( 'Content-Security-Policy-Report-Only: ', $builder->sent[2] );
+		$this->assertStringContainsString( 'report-uri ' . $endpoint, $builder->sent[2] );
+		$this->assertStringContainsString( 'report-to csp-endpoint', $builder->sent[2] );
+		$this->assertArrayHasKey( 'last_sent', Csp_Delivery_Log::get( 'admin' ) );
+	}
+
+	public function test_frontend_report_uri_carries_no_surface_hint(): void {
+		$policy = $this->builder->build_policy_string( $this->make_profile( [ 'default-src' => [ "'none'" ] ] ), 'frontend' );
+
+		$this->assertStringContainsString( 'report-uri https://example.com/wp-json/sam/v1/report;', $policy );
+	}
+
+	public function test_a_configured_report_endpoint_is_never_given_a_surface_hint(): void {
+		update_option( 'wp_sam_report_endpoint_url', 'https://public.example.net/wp-json/custom-endpoint/v1/report' );
+
+		$policy = $this->builder->build_policy_string( $this->make_profile( [ 'default-src' => [ "'none'" ] ] ), 'admin' );
+
+		$this->assertStringContainsString( 'report-uri https://public.example.net/wp-json/custom-endpoint/v1/report;', $policy );
+	}
+
 	public function test_the_api_surface_never_gets_the_learned_policy(): void {
 		$method = new ReflectionMethod( $this->builder, 'emit_profile_header' );
 

@@ -90,6 +90,58 @@ class ViolationReporterTest extends TestCase {
 		unset( $_SERVER['REMOTE_ADDR'] );
 	}
 
+	public function test_admin_reports_have_their_own_flood_budget(): void {
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.42';
+		$GLOBALS['_wp_transients'][ 'wp_sam_rate_csp_report_' . md5( '203.0.113.42' ) ] = 40; // Frontend budget spent...
+		$reporter = new Violation_Reporter( $this->audit, null, null, null, new Rate_Limiter() );
+
+		$request = new WP_REST_Request();
+		$request->set_param( 'surface', 'admin' );
+
+		$this->assertTrue( $reporter->check_not_flooding( $request ), '...but this IP\'s admin reports are counted separately.' );
+		$this->assertSame( 1, $GLOBALS['_wp_transients'][ 'wp_sam_rate_csp_report_admin_' . md5( '203.0.113.42' ) ] );
+		unset( $_SERVER['REMOTE_ADDR'] );
+	}
+
+	public function test_admin_flood_budget_is_larger_than_the_frontend_one(): void {
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.42';
+		$GLOBALS['_wp_transients'][ 'wp_sam_rate_csp_report_admin_' . md5( '203.0.113.42' ) ] = 100;
+		$reporter = new Violation_Reporter( $this->audit, null, null, null, new Rate_Limiter() );
+		$request  = new WP_REST_Request();
+		$request->set_param( 'surface', 'admin' );
+
+		$this->assertTrue( $reporter->check_not_flooding( $request ) );
+
+		$GLOBALS['_wp_transients'][ 'wp_sam_rate_csp_report_admin_' . md5( '203.0.113.42' ) ] = 120;
+		$this->assertInstanceOf( WP_Error::class, $reporter->check_not_flooding( $request ) );
+		unset( $_SERVER['REMOTE_ADDR'] );
+	}
+
+	public function test_an_unrecognised_surface_hint_uses_the_frontend_budget(): void {
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.42';
+		$GLOBALS['_wp_transients'][ 'wp_sam_rate_csp_report_' . md5( '203.0.113.42' ) ] = 40;
+		$reporter = new Violation_Reporter( $this->audit, null, null, null, new Rate_Limiter() );
+		$request  = new WP_REST_Request();
+		$request->set_param( 'surface', 'api' );
+
+		$this->assertInstanceOf( WP_Error::class, $reporter->check_not_flooding( $request ) );
+		unset( $_SERVER['REMOTE_ADDR'] );
+	}
+
+	public function test_a_refused_report_is_recorded_against_its_surface(): void {
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.42';
+		$GLOBALS['_wp_transients'][ 'wp_sam_rate_csp_report_login_' . md5( '203.0.113.42' ) ] = 40;
+		$reporter = new Violation_Reporter( $this->audit, null, null, null, new Rate_Limiter() );
+		$request  = new WP_REST_Request();
+		$request->set_param( 'surface', 'login' );
+
+		$reporter->check_not_flooding( $request );
+
+		$this->assertArrayHasKey( 'last_throttled', \WP_SAM\CSP\Csp_Delivery_Log::get( 'login' ) );
+		$this->assertArrayNotHasKey( 'last_throttled', \WP_SAM\CSP\Csp_Delivery_Log::get( 'frontend' ) );
+		unset( $_SERVER['REMOTE_ADDR'] );
+	}
+
 	public function test_check_not_flooding_fails_open_with_no_resolvable_ip(): void {
 		unset( $_SERVER['REMOTE_ADDR'] );
 		$reporter = new Violation_Reporter( $this->audit, null, null, null, new Rate_Limiter() );

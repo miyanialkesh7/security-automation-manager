@@ -153,4 +153,13 @@ class RecommendationRuleCspEnforceReadyTest extends TestCase {
 
 		$this->assertCount( 1, $this->rule->evaluate() );
 	}
+
+	public function test_a_surface_whose_reports_were_throttled_in_the_window_does_not_fire(): void {
+		$GLOBALS['_wpdb_get_results']   = array( $this->profile_row( array( 'surface' => 'admin' ) ) );
+		$GLOBALS['_wpdb_get_var_queue'] = array( 0, 0 );
+		$this->deliver( 'admin', 60, 1 );
+		$GLOBALS['_wp_options']['wp_sam_csp_delivery_admin']['last_throttled'] = time() - ( 3 * DAY_IN_SECONDS );
+
+		$this->assertSame( array(), $this->rule->evaluate() );
+	}
 }
