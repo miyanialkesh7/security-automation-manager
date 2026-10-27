@@ -4,7 +4,7 @@ Tags: security, csp, content security policy, hsts, ssl certificates
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 2.11.5
+Stable tag: 2.12.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,7 +60,7 @@ Reports received by this plugin are validated and stored in this site's WordPres
 
 For Cloudflare, CDN, and reverse-proxy deployments, administrators can configure an origin-only policy header name such as X-Origin-CSP-Policy. The proxy can then copy that origin header into the browser-facing Content-Security-Policy-Report-Only or Content-Security-Policy header.
 
-The Scripts page's External tab has a "Suggest" button, only triggered by an administrator explicitly clicking it, that fetches a URL the administrator themselves supplies (restricted to a third-party origin already observed on this site) and computes a Subresource Integrity hash from it, saving that hash immediately as the pinned value with no separate confirmation step. No content from that fetch is stored or sent anywhere else; only the computed hash is written to this site's own database. Nothing is fetched automatically or in the background as part of this feature.
+The Scripts page's External tab has a "Suggest" button, only triggered by an administrator explicitly clicking it, that fetches a URL the administrator themselves supplies (restricted to a third-party origin already observed on this site) and computes a Subresource Integrity hash from it, saving that hash immediately as the pinned value with no separate confirmation step. No content from that fetch is stored or sent anywhere else; only the computed hash is written to this site's own database. Once an administrator has pinned a third-party file by hash, the plugin also fetches that same file once a day from the origin it was pinned on (https only, a plain GET with no site data sent, at most 25 files per day) to check that its content still matches the pinned hash. Only the computed hash is kept; nothing is fetched for origins that have not been pinned.
 
 The Scripts page's Internal tab, when enabled for a surface, reads this site's own theme/plugin/core files directly from local disk to compute their Subresource Integrity hash -- never a network fetch of any kind, since the file being hashed is the exact file this server is about to serve.
 
@@ -118,6 +118,14 @@ The remaining three DNS-01 drivers (acme-dns, PowerDNS, and RFC 2136 dynamic DNS
 When an administrator configures automatic cPanel deployment, once a certificate is successfully issued the plugin sends an HTTPS request to the cPanel host the administrator specifies (cPanel's UAPI SSL::install_ssl endpoint), containing: the cPanel account username and API token supplied by the administrator (as an Authorization header); the domain name; the issued certificate; the certificate chain; and the certificate's private key. This is the one automatic-deployment method that transmits the private key itself, since installing a certificate requires it. Nothing is sent unless cPanel deployment is explicitly configured, and it happens once per issuance or renewal, immediately after the certificate is issued. Because the endpoint is the administrator's own hosting provider, not a service this plugin operates or has a relationship with, no single Terms of Service or Privacy Policy governs it -- those are whatever the administrator's own hosting provider publishes for their account and API access.
 
 == Changelog ==
+
+= 2.12.0 =
+
+* Fixed: Content Security Policy violation reports from your WordPress dashboard (the admin surface) were being turned away. The report endpoint's flood guard gave each IP address one shared allowance for every part of the site, and dashboard pages still being learned send many reports per visit, so staff browsing from one office address used it up. Admin and login reports now have their own allowance, and the Violations tab shows each surface separately: how many violations, when it last reported, when its policy was last sent, and whether any reports were turned away.
+* Added: SAM now notices when a vendor changes a script you pinned by hash. A daily check re-fetches each pinned file and compares it with the approved hash. A change raises an Action Centre item and a notice, and Decide → Dependency Classification offers "Re-approve new hash" or "Allow by host instead" in one click.
+* Added: Google Tag Manager, Google Analytics, HubSpot, Cloudflare Turnstile and reCAPTCHA are recognised as frequently-updated vendors, shown as "allowed by host, not hash" with the reason.
+* Added: Control → Traffic Controls → Network Intelligence → Geo-IP: the Country Block List can tick or untick countries by group -- UN M49 continents and regions, the EU and EEA, and UK and US (OFAC) sanctions snapshots, each with its source and date. Every country stays individually editable, and nothing changes until you save.
+* Changed: the Settings home page now shows only the summary (scorecard, recent activity, protection status and Action Centre). The per-layer status tables have moved, unchanged, to a new Settings → All tab.
 
 = 2.11.5 =
 
@@ -189,9 +197,5 @@ When an administrator configures automatic cPanel deployment, once a certificate
 = 2.9.102 =
 
 * Added: Recommendations Engine (Phase 4F) -- foundation increment. A new "Recommendations" tab on Settings/Overview, right after Security Health, for prioritised, evidence-backed suggestions drawn from what this plugin already observes. Nothing is ever applied automatically; every suggestion links to where to act on it, and can be dismissed with a reason until the underlying evidence actually changes. This increment ships the engine and admin UI with no rules registered yet -- concrete rules (certificate renewal, unexplained drift, expiring exceptions, and more) land in the following increments.
-
-= 2.9.101 =
-
-* Added: Continuous Intelligence's bot/crawler classification gains a "repeated errors" signal (Phase 4C carried-forward item, the second and last of the two named alongside "timing") -- an unrecognised source whose recent requests were disproportionately HTTP errors (most often 404) is now classified as "Error probing (repeated 4xx/5xx)" on the Identities tab, the classic signature of a scanner probing for paths that don't exist or aren't allowed. Independent of enumeration and timing -- a source can be flagged for any of the three without the others.
 
 Full changelog history: https://github.com/vcns/security-automation-manager/blob/main/CHANGELOG.md

@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows semantic versioning for plugin releases.
 
+## [2.12.0] - 2026-10-27
+
+### Fixed
+
+- **Admin CSP violation reports are no longer turned away by the report endpoint's flood guard.** `Violation_Reporter::check_not_flooding()` (2.9.79) allowed 40 reports per IP per 10 seconds, shared across every surface. Staff in wp-admin share an office IP with their own frontend browsing, and an admin page still being learned sends dozens of reports per load, so admin reports were the ones refused with a 429, without any record. Admin reports had also never arrived before 2.11.4, because until then the admin policy was never sent on wp-admin pages at all.
+  - `Reporting_Endpoint::url_for_surface()` adds a `surface` hint to the admin and login `report-uri` and `Reporting-Endpoints` URL. The frontend URL and any administrator-configured override URL are unchanged.
+  - The flood budget is per (IP, surface): frontend 40, admin 120, login 40. The hint only selects a bucket. The surface a report is stored under still comes from its own document URI.
+  - Each refusal is recorded in `Csp_Delivery_Log` (`last_throttled`). `csp_enforce_ready` won't treat a window with throttled reports as quiet.
+  - Observe → CSP Violations gets a per-surface summary. For each surface it shows distinct violations, last report, policy last sent, and whether reports were refused. Each surface links to its own filtered list.
+  - `Policy_Builder` sends headers through `send_header()`. `PolicyBuilderTest` asserts exactly what a wp-admin response carries: the report-only policy, `report-uri …/sam/v1/report?surface=admin`, `report-to csp-endpoint`, and the matching `Reporting-Endpoints` header.
+
+### Added
+
+- **Pinned script hash drift detection.** A new daily cron job, `Pinned_Dependency_Checker`, re-fetches each `immutable_pinned` file and compares it with the approved hash using the same algorithm.
+  - Each fetch is https only, same origin as the row, 5 MB cap, at most 25 files per run.
+  - The fetch helper `Dependency_Sri_Fetcher` is shared with Suggest, which now also rejects unsafe (private or loopback) URLs.
+  - A changed file raises a high-priority "Pinned script hash has drifted" recommendation and Action Centre item, an admin notice linking to Decide → Dependency Classification, and a failing Security Health dependencies row.
+  - A file that can't be fetched is shown as "couldn't check", never as drift.
+  - Schema v48 adds `pinned_url`, `integrity_checked_at`, `integrity_attempted_at`, `integrity_check_error`, `drift_detected_at` and `drift_observed_sri` to `sam_dependency_inventory`.
+- **One-click "Re-approve new hash" or "Allow by host instead"** on a drifted row. The banner shows the pinned and now-served hashes with a Copy button, because the `integrity` attribute in the theme or plugin markup must be updated too.
+- **Known-vendor profiles** (`Known_Vendor_Profiles`, filter `wp_sam_known_vendor_profiles`) for Google Tag Manager, Google Analytics, HubSpot, Cloudflare Turnstile and reCAPTCHA (matched by host and `/recaptcha/` path). Each is shown as "allowed by host, not hash", with the reason. Nothing is reclassified automatically.
+- **Country groups on the Geo-IP Country Block List** (Control → Traffic Controls → Network Intelligence → Geo-IP). New `Country_Groups` is a bundled table of:
+  - UN M49 regions, sub-regions and intermediate regions;
+  - the EU (27) and EEA (30);
+  - sanctions snapshots: UK country-specific regimes, and US OFAC comprehensive sanctions (CU, IR, KP).
+
+  Each group has its source and as-of date (2026-10-27). Ticking a group expands into the individual country checkboxes, which stay editable, and nothing is saved until Save.
+
+### Changed
+
+- **Settings opens on a summary-only Overview** (scorecard, recent activity, Protection Status, Action Centre). The Layer 1–5 tables have moved, unchanged, to a new Settings → All tab. Getting Started, Control → "Every header & content policy", the docs and `CLAUDE.md`'s route table now point there.
+- The Dependency Classification notice no longer claims hashes are never computed by fetching the remote URL.
+- `readme.txt`'s External services section now discloses the daily pinned-file check.
+
 ## [2.11.5] - 2026-10-23
 
 ### Security
