@@ -295,6 +295,10 @@ class VersionConsistencyTest extends TestCase {
 		$this->assertStringContainsString( 'https://vcns.github.io/wp-updates/security-automation-manager/', $workflow );
 		$this->assertStringContainsString( 'WP_UPDATES_TOKEN', $workflow );
 		$this->assertStringContainsString( 'sha256sum', $workflow );
+		// The feed's compatibility fields come from the packaged readme.txt, never hard-coded.
+		$this->assertStringContainsString( '"tested": "${README_TESTED}"', $workflow );
+		$this->assertStringContainsString( '"requires": "${README_REQUIRES}"', $workflow );
+		$this->assertStringContainsString( '"requires_php": "${README_REQUIRES_PHP}"', $workflow );
 	}
 
 	private function extract_plugin_header_version( string $file ): string {
