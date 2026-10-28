@@ -117,8 +117,9 @@ final class Traffic_Block_Store {
 	/**
 	 * Advances this source's stage by one step and returns the updated
 	 * row. The step is taken from effective_stage(), so a source that has
-	 * been quiet for a while restarts lower down the ladder. A source already at 'persistent_block' is left untouched
-	 * (only bookkeeping fields change) -- see class docblock.
+	 * been quiet for a while restarts lower down the ladder. A source
+	 * already at 'persistent_block' is left untouched (only bookkeeping
+	 * fields change) -- see class docblock.
 	 *
 	 * A loopback or private-network address (Cidr_Matcher::is_local()) is
 	 * never escalated and returns an empty array. This is the one path every
