@@ -215,7 +215,7 @@ class PageIntelligenceTest extends TestCase {
 
 		unset( $_GET['tab'] );
 
-		$this->assertStringContainsString( 'Auto-authorised (this server or private network)', $output );
+		$this->assertStringContainsString( 'Auto-authorised (this site&#039;s own servers or network)', $output );
 		$this->assertStringNotContainsString( 'value="authorise"', $output );
 	}
 

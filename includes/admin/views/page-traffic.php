@@ -34,7 +34,9 @@ use WP_SAM\Intelligence\Humans_Txt_Store;
 use WP_SAM\Intelligence\Ip_Rule_Store;
 use WP_SAM\Intelligence\Iso_Countries;
 use WP_SAM\Intelligence\Network_Rule_Store;
+use WP_SAM\Intelligence\Own_Address_Store;
 use WP_SAM\Intelligence\Robots_Rules_Store;
+use WP_SAM\Intelligence\Scanner_Identity_Store;
 use WP_SAM\Intelligence\Security_Txt_Store;
 use WP_SAM\Intelligence\Tor_Exit_List_Store;
 use WP_SAM\Intelligence\Traffic_Block_Store;
@@ -102,7 +104,7 @@ $tab_help = array(
 		<?php $policies = ( new Traffic_Policy_Store() )->all(); ?>
 
 		<p class="description" style="max-width:700px">
-			<?php esc_html_e( "Each surface below -- frontend, admin, login, and the REST API -- gets its own rate limit, because what counts as normal traffic on one is an attack on another: a handful of requests a minute is unremarkable on the frontend but alarming against the login form. In Observe mode, crossing that limit is only ever recorded, never enforced. In Enforce mode, a source that crosses it climbs a progressive ladder instead -- warned, then throttled, then temporarily blocked, then blocked for longer -- visible per-source on the Blocks tab, so one burst of ordinary traffic isn't treated the same as a sustained attack. Login also gets a failed-attempt lockout, since brute-forcing a password is a pattern rate limiting alone doesn't fully capture.", 'vcns-security-automation-manager' ); ?>
+			<?php esc_html_e( "Each surface below -- frontend, admin, login, and the REST API -- gets its own rate limit, because what counts as normal traffic on one is an attack on another: a handful of requests a minute is unremarkable on the frontend but alarming against the login form. In Observe mode, crossing that limit is only ever recorded, never enforced. In Enforce mode, a source that crosses it climbs a progressive ladder instead -- warned, then throttled, then temporarily blocked, then blocked for longer -- visible per-source on the Blocks tab, so one burst of ordinary traffic isn't treated the same as a sustained attack. Each quiet hour after that steps the source back down one stage, and a logged-in administrator's own requests never count towards the limit. Login also gets a failed-attempt lockout, since brute-forcing a password is a pattern rate limiting alone doesn't fully capture.", 'vcns-security-automation-manager' ); ?>
 		</p>
 
 		<?php foreach ( $policies as $policy ) : ?>
@@ -250,12 +252,57 @@ $tab_help = array(
 			<?php submit_button( __( 'Add rule', 'vcns-security-automation-manager' ) ); ?>
 		</form>
 
+		<?php
+		$own_addresses = Own_Address_Store::all();
+		$own_rejected  = get_transient( 'wp_sam_own_addresses_rejected_' . get_current_user_id() );
+		if ( false !== $own_rejected ) {
+			delete_transient( 'wp_sam_own_addresses_rejected_' . get_current_user_id() );
+		}
+		$own_suggested = array_values( array_diff( ( new Scanner_Identity_Store() )->recent_wp_cron_callers(), $own_addresses ) );
+		?>
+		<h2 id="wp-sam-own-addresses" style="margin-top:2em"><?php esc_html_e( 'This site\'s own addresses', 'vcns-security-automation-manager' ); ?></h2>
+		<p class="description" style="max-width:700px">
+			<?php esc_html_e( 'If this site\'s own servers or containers reach it through a public IP address, list those addresses here. They are then treated like a private address: never rate-limited or blocked automatically, never counted into a campaign, and shown on Observe → Continuous Intelligence → Identities as this site\'s own. An Allow rule above only stops this page blocking an address; an address listed here also stops showing up as escalating. A Block rule above still applies. Private and loopback addresses (10.x, 172.16-31.x, 192.168.x, 127.x and the IPv6 equivalents) are already covered and don\'t need listing.', 'vcns-security-automation-manager' ); ?>
+		</p>
+		<?php if ( is_array( $own_rejected ) && ! empty( $own_rejected ) ) : ?>
+		<div class="notice notice-warning inline">
+			<p><?php esc_html_e( 'These entries were not saved:', 'vcns-security-automation-manager' ); ?></p>
+			<ul>
+				<?php foreach ( $own_rejected as $rejected ) : ?>
+				<li><code><?php echo esc_html( (string) ( $rejected['entry'] ?? '' ) ); ?></code> -- <?php echo esc_html( (string) ( $rejected['reason'] ?? '' ) ); ?></li>
+				<?php endforeach; ?>
+			</ul>
+		</div>
+		<?php elseif ( isset( $_GET['own_saved'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display-only flag set by our own redirect. ?>
+		<div class="notice notice-success inline"><p><?php esc_html_e( 'Saved.', 'vcns-security-automation-manager' ); ?></p></div>
+		<?php endif; ?>
+		<?php if ( ! empty( $own_suggested ) ) : ?>
+		<p class="description" style="max-width:700px">
+			<?php
+			printf(
+				/* translators: %s: comma-separated IP addresses. */
+				esc_html__( 'Seen calling /wp-cron.php in the last 30 days: %s. WordPress normally only calls that on itself, so these are probably this site\'s own servers. Check each one before adding it: an external cron service calls it too.', 'vcns-security-automation-manager' ),
+				'<code>' . implode( '</code>, <code>', array_map( 'esc_html', $own_suggested ) ) . '</code>' // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- each address is escaped with esc_html().
+			);
+			?>
+		</p>
+		<?php endif; ?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<?php wp_nonce_field( 'wp_sam_own_addresses_save' ); ?>
+			<input type="hidden" name="action" value="wp_sam_own_addresses_save" />
+			<p>
+				<label for="own_addresses"><?php esc_html_e( 'One IP address or CIDR range per line', 'vcns-security-automation-manager' ); ?></label><br />
+				<textarea id="own_addresses" name="own_addresses" rows="4" style="width:100%;max-width:300px" placeholder="203.0.113.10&#10;203.0.113.32/28"><?php echo esc_textarea( implode( "\n", $own_addresses ) ); ?></textarea>
+			</p>
+			<?php submit_button( __( 'Save own addresses', 'vcns-security-automation-manager' ) ); ?>
+		</form>
+
 	<?php elseif ( 'blocks' === $tab ) : ?>
 
 		<?php $blocks = ( new Traffic_Block_Store() )->all_active(); ?>
 
 		<p class="description" style="max-width:700px">
-			<?php esc_html_e( "This is what automatic detection has done on its own, without you adding anything here -- crossing a rate limit or tripping an enforce-mode detector moves a source up a stage (Warn, Throttle, Temporary block, Extended block); Occurrences counts how many times that's happened. Release lifts a block immediately, useful when you recognise a source as a false positive; Make Permanent turns a temporary, auto-expiring block into one that stays until you remove it yourself -- functionally the same outcome as adding it to IP Rules by hand. Nothing here is a manual decision until you click one of those two buttons.", 'vcns-security-automation-manager' ); ?>
+			<?php esc_html_e( "This is what automatic detection has done on its own, without you adding anything here -- crossing a rate limit or tripping an enforce-mode detector moves a source up a stage (Warn, Throttle, Temporary block, Extended block), and every hour without a new violation, once any block has ended, moves it back down one; Occurrences counts how many times that's happened. Release lifts a block immediately, useful when you recognise a source as a false positive; Make Permanent turns a temporary, auto-expiring block into one that stays until you remove it yourself -- functionally the same outcome as adding it to IP Rules by hand. Nothing here is a manual decision until you click one of those two buttons.", 'vcns-security-automation-manager' ); ?>
 		</p>
 
 		<div class="wp-sam-table-wrap">

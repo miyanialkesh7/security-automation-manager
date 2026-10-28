@@ -285,6 +285,39 @@ final class Scanner_Identity_Store {
 		return false !== $encoded ? $encoded : '[]';
 	}
 
+	/**
+	 * Public addresses whose recent requests include /wp-cron.php, most
+	 * recent first. WordPress normally only calls that on itself, so these
+	 * are usually this site's own servers reaching it through a public
+	 * address. Only ever shown as a suggestion for an administrator to
+	 * confirm: an external cron service calls it too.
+	 *
+	 * @return array<int, string>
+	 */
+	public function recent_wp_cron_callers( int $days = 30, int $limit = 5 ): array {
+		global $wpdb;
+		$table = $wpdb->prefix . 'sam_scanner_identities';
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$ips = $wpdb->get_col(
+			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				"SELECT ip FROM {$table} WHERE recent_paths LIKE %s AND last_seen_at >= DATE_SUB( %s, INTERVAL %d DAY ) GROUP BY ip ORDER BY MAX(last_seen_at) DESC LIMIT %d",
+				'%' . $wpdb->esc_like( '/wp-cron.php' ) . '%',
+				current_time( 'mysql', true ),
+				$days,
+				$limit * 4
+			)
+		);
+
+		$public = array_filter(
+			is_array( $ips ) ? array_map( 'strval', $ips ) : array(),
+			static fn( string $ip ): bool => ! Own_Address_Store::includes( $ip )
+		);
+
+		return array_slice( array_values( $public ), 0, $limit );
+	}
+
 	public function authorise( int $id, int $user_id, string $note ): bool {
 		return $this->set_decision( $id, 'customer_authorised', $user_id, $note );
 	}

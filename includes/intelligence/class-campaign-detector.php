@@ -97,8 +97,9 @@ final class Campaign_Detector {
 	}
 
 	/**
-	 * Drops loopback and private-network addresses (Cidr_Matcher::is_local())
-	 * from a participant list. Those are this site's own servers, containers
+	 * Drops loopback and private-network addresses, and any declared as
+	 * this site's own (Own_Address_Store::includes()), from a participant
+	 * list. Those are this site's own servers, containers
 	 * or load balancers -- e.g. WP-Cron or a security plugin's scan
 	 * requesting this site's own URLs -- so they are neither counted toward
 	 * a campaign nor offered for blocking.
@@ -110,7 +111,7 @@ final class Campaign_Detector {
 		return array_values(
 			array_filter(
 				$ips,
-				static fn( string $ip ): bool => ! Cidr_Matcher::is_local( $ip )
+				static fn( string $ip ): bool => ! Own_Address_Store::includes( $ip )
 			)
 		);
 	}

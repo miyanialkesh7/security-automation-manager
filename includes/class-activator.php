@@ -431,6 +431,7 @@ class Activator {
 			'wp_sam_tor_list_last_fetch_status',
 			'wp_sam_geoip_provider',
 			'wp_sam_geoip_ipinfo_token',
+			'wp_sam_own_addresses',
 		);
 	}
 

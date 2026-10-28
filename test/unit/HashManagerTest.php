@@ -657,6 +657,58 @@ class HashManagerTest extends TestCase {
 		$manager->prune_stale_by_age( 30 );
 	}
 
+	// ── retire_json_data_hashes() ──────────────────────────────────────────────
+
+	public function test_retire_json_data_hashes_retires_json_ld_and_json_rows_only(): void {
+		$GLOBALS['_wpdb_get_results'] = array(
+			array( 'id' => 1, 'source_context' => '{"@context":"https://schema.org","@graph":[{"@type":"WebPage"' ),
+			array( 'id' => 2, 'source_context' => '[{"@context":"https://schema.org","@type":"Organization"}]' ),
+			array( 'id' => 3, 'source_context' => '{ "imports": { "lodash": "/js/lodash.js" } }' ),
+			array( 'id' => 4, 'source_context' => '{ "use strict"; window.dataLayer = window.dataLayer || []; }' ),
+			array( 'id' => 5, 'source_context' => '[1, 2, 3].forEach(function (n) { console.log(n); });' ),
+			array( 'id' => 6, 'source_context' => '{}' ),
+		);
+		$GLOBALS['_wpdb_query_result'] = 3;
+
+		$retired = $this->manager->retire_json_data_hashes();
+
+		$this->assertSame( 3, $retired );
+		$update = (string) end( $GLOBALS['_wpdb_queries'] );
+		$this->assertStringContainsString( "SET status = 'retired'", $update );
+		$this->assertStringContainsString( 'IN (1,2,3)', $update );
+	}
+
+	public function test_retire_json_data_hashes_makes_no_update_when_nothing_matches(): void {
+		$GLOBALS['_wpdb_get_results'] = array(
+			array( 'id' => 4, 'source_context' => '{ var a = 1; }' ),
+		);
+
+		$audit = $this->createMock( Audit_Log::class );
+		$audit->expects( $this->never() )->method( 'log' );
+		$manager = new Hash_Manager( $audit, $this->createMock( Feature_Gate::class ) );
+
+		$this->assertSame( 0, $manager->retire_json_data_hashes() );
+		$this->assertSame( array(), $GLOBALS['_wpdb_queries'] ?? array() );
+	}
+
+	public function test_retire_json_data_hashes_updates_in_chunks_and_logs_once(): void {
+		$GLOBALS['_wpdb_get_results']  = array_map(
+			static fn( int $i ): array => array( 'id' => $i, 'source_context' => '{"@context":"https://schema.org"}' ),
+			range( 1, 450 )
+		);
+		$GLOBALS['_wpdb_query_result'] = 200;
+
+		$audit = $this->createMock( Audit_Log::class );
+		$audit->expects( $this->once() )
+			->method( 'log' )
+			->with( 'hash_manager', 'hashes_retired_json_data', $this->anything(), 'info' );
+		$manager = new Hash_Manager( $audit, $this->createMock( Feature_Gate::class ) );
+
+		$manager->retire_json_data_hashes();
+
+		$this->assertCount( 3, $GLOBALS['_wpdb_queries'] );
+	}
+
 	// ── inject_nonce_into_wp_inline_style_blocks() ────────────────────────────
 
 	public function test_injects_nonce_into_a_wp_add_inline_style_block(): void {

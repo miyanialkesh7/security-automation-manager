@@ -136,7 +136,7 @@ class DiscoveryTest extends TestCase {
 			$this->assertStringNotContainsString( '/wp-json', $url );
 		}
 		$this->assertSame(
-			[ [ 'https://example.com', 'frontend' ], [ 'https://example.com/wp-login.php', 'login' ] ],
+			[ [ 'https://example.com/', 'frontend' ], [ 'https://example.com/wp-login.php', 'login' ] ],
 			$discovery->crawled
 		);
 	}

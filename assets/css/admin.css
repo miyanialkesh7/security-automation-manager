@@ -504,15 +504,20 @@ details.wp-sam-filter-form form {
 
 /*
  * Geo-IP country grid (Traffic Controls > Network Intelligence > Geo-IP):
- * a flowing multi-column list of checkboxes, one per ISO country, instead
- * of a single narrow list -- wide enough to actually use the page instead
- * of leaving most of it empty.
+ * one checkbox per ISO country, in as many alphabetical columns as the
+ * page has room for.
+ *
+ * Deliberately no height cap and no column-count cap. A multi-column box
+ * with a fixed height doesn't scroll down -- it adds overflow columns to
+ * the right -- so the old 420px cap hid most countries behind a
+ * horizontal scrollbar, and the old 4-column cap made each column on a
+ * wide screen about twice as wide as the names in it. Names too long for
+ * a column wrap under themselves (the hanging indent clears the
+ * checkbox) instead of running into the next column.
  */
 .wp-sam-country-grid {
-	columns: 220px 4;
+	column-width: 14em;
 	column-gap: 1.5em;
-	max-height: 420px;
-	overflow-y: auto;
 	border: 1px solid #dcdcde;
 	background: #fff;
 	padding: 12px 16px;
@@ -521,8 +526,9 @@ details.wp-sam-filter-form form {
 
 .wp-sam-country-grid label {
 	display: block;
-	white-space: nowrap;
-	padding: 2px 0;
+	break-inside: avoid;
+	padding: 2px 0 2px 1.5rem;
+	text-indent: -1.5rem;
 }
 
 .wp-sam-country-groups {
@@ -683,6 +689,13 @@ details.wp-sam-filter-form form {
 
 	.wp-sam-stat-row {
 		flex-direction: column;
+	}
+
+	/* WordPress enlarges checkboxes at this width; the country grid's
+	   hanging indent has to grow with them. */
+	.wp-sam-country-grid label {
+		padding-left: 2.1rem;
+		text-indent: -2.1rem;
 	}
 }
 

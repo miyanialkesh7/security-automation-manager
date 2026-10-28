@@ -127,6 +127,11 @@ When an administrator configures automatic cPanel deployment, once a certificate
 * Added: Control → Traffic Controls → Network Intelligence → Geo-IP: the Country Block List can tick or untick countries by group -- UN M49 continents and regions, the EU and EEA, and UK and US (OFAC) sanctions snapshots, each with its source and date. Every country stays individually editable, and nothing changes until you save.
 * Changed: the Settings home page now shows only the summary (scorecard, recent activity, protection status and Action Centre). The per-layer status tables have moved, unchanged, to a new Settings → All tab.
 
+= 2.11.6 =
+
+* Fixed: requests from your own hosting network -- this server reaching itself through an internal address, a sibling container, a load balancer or a health check (private addresses such as 10.x, 172.16-31.x and 192.168.x) -- are no longer rate-limited, escalated or blocked automatically, and no longer count toward campaigns. Previously the plugin could block your own site's scheduled tasks. An IP block rule you add yourself still applies.
+* Improved: on Observe → Continuous Intelligence → Identities, a source's recent requests now group repeated paths with a count (for example "/wp-cron.php ×9") instead of listing the same path again and again.
+
 = 2.11.5 =
 
 * Security: closed a way for a visitor to slip past Traffic Controls (rate limits and IP blocks) and go unrecorded by the attack detectors by sending a particular request header. Updating is recommended.
@@ -193,9 +198,5 @@ When an administrator configures automatic cPanel deployment, once a certificate
 = 2.9.103 =
 
 * Added: Recommendations Engine (Phase 4F) gains its first three rules -- certificate renewal due, unexplained high/critical-risk configuration drift, and exceptions expiring soon. Each reuses evidence this plugin already collects (no new data source), links straight to where to act on it, and explains why it matters and what to do instead if the suggestion doesn't fit.
-
-= 2.9.102 =
-
-* Added: Recommendations Engine (Phase 4F) -- foundation increment. A new "Recommendations" tab on Settings/Overview, right after Security Health, for prioritised, evidence-backed suggestions drawn from what this plugin already observes. Nothing is ever applied automatically; every suggestion links to where to act on it, and can be dismissed with a reason until the underlying evidence actually changes. This increment ships the engine and admin UI with no rules registered yet -- concrete rules (certificate renewal, unexplained drift, expiring exceptions, and more) land in the following increments.
 
 Full changelog history: https://github.com/vcns/security-automation-manager/blob/main/CHANGELOG.md

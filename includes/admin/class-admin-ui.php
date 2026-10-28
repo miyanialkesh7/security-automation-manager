@@ -94,6 +94,7 @@ use WP_SAM\Intelligence\Ip_Resolver;
 use WP_SAM\Intelligence\Ip_Rule_Store;
 use WP_SAM\Intelligence\Iso_Countries;
 use WP_SAM\Intelligence\Network_Rule_Store;
+use WP_SAM\Intelligence\Own_Address_Store;
 use WP_SAM\Intelligence\Recommendation_Dismissal_Store;
 use WP_SAM\Intelligence\Robots_Rules_Store;
 use WP_SAM\Intelligence\Security_Txt_Store;
@@ -174,6 +175,7 @@ class Admin_UI {
 		add_action( 'admin_post_wp_sam_scanner_vendor_delete', array( $this, 'handle_scanner_vendor_delete' ) );
 		add_action( 'admin_post_wp_sam_traffic_policy_update', array( $this, 'handle_traffic_policy_update' ) );
 		add_action( 'admin_post_wp_sam_ip_rule_add', array( $this, 'handle_ip_rule_add' ) );
+		add_action( 'admin_post_wp_sam_own_addresses_save', array( $this, 'handle_own_addresses_save' ) );
 		add_action( 'admin_post_wp_sam_ip_rule_delete', array( $this, 'handle_ip_rule_delete' ) );
 		add_action( 'admin_post_wp_sam_traffic_block_release', array( $this, 'handle_traffic_block_release' ) );
 		add_action( 'admin_post_wp_sam_traffic_block_persist', array( $this, 'handle_traffic_block_persist' ) );
@@ -1348,6 +1350,30 @@ class Admin_UI {
 		( new Ip_Rule_Store() )->delete( (int) ( $_POST['rule_id'] ?? 0 ) );
 
 		wp_safe_redirect( admin_url( 'admin.php?page=security-automation-manager-traffic&tab=ip-rules' ) );
+		exit;
+	}
+
+	public function handle_own_addresses_save(): void {
+		check_admin_referer( 'wp_sam_own_addresses_save' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to manage traffic controls.', 'vcns-security-automation-manager' ) );
+		}
+
+		$result = Own_Address_Store::save( sanitize_textarea_field( wp_unslash( $_POST['own_addresses'] ?? '' ) ) );
+
+		// Exempting an address from automatic blocking is worth a record of who did it.
+		$this->plugin->audit->log(
+			'traffic_controls',
+			'own_addresses_saved',
+			sprintf( 'This site\'s own addresses set to: %s.', empty( $result['saved'] ) ? '(none)' : implode( ', ', $result['saved'] ) ),
+			'info'
+		);
+
+		if ( ! empty( $result['rejected'] ) ) {
+			set_transient( 'wp_sam_own_addresses_rejected_' . get_current_user_id(), $result['rejected'], 5 * MINUTE_IN_SECONDS );
+		}
+
+		wp_safe_redirect( admin_url( 'admin.php?page=security-automation-manager-traffic&tab=ip-rules&own_saved=1#wp-sam-own-addresses' ) );
 		exit;
 	}
 
