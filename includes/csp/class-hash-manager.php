@@ -647,6 +647,87 @@ class Hash_Manager {
 	}
 
 	/**
+	 * Retires active hashes whose captured content is JSON data rather than
+	 * script or style: JSON-LD schema markup (Yoast and similar) and other
+	 * application/json blocks, learned before extract_and_record() started
+	 * skipping those types. CSP never applies to such a block, so its hash
+	 * only uses up the header's byte budget, and can push out hashes that
+	 * real inline scripts need. On one site, 1,655 of 1,763 active frontend
+	 * hashes were JSON-LD, one per page.
+	 *
+	 * Recognised from source_context, the start of the content: text that
+	 * opens with an object key ({"...": or [{"...":) can never begin a
+	 * working script or stylesheet, so nothing that runs is retired. Rows
+	 * with no context (recorded before that column was written) are left to
+	 * prune_stale_by_age(). Reactivation works as for any retired hash: if
+	 * the same content is ever hashed again, upsert() makes it active.
+	 *
+	 * Runs on every daily and manual scan; after the first run there is
+	 * normally nothing left to match, so it costs one indexed query.
+	 *
+	 * @return int Number of rows retired.
+	 */
+	public function retire_json_data_hashes(): int {
+		global $wpdb;
+		$table = $wpdb->prefix . 'csp_hash_inventory';
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				"SELECT id, source_context FROM {$table} WHERE status = 'active' AND ( source_context LIKE %s OR source_context LIKE %s )",
+				'{%',
+				'[%'
+			),
+			ARRAY_A
+		);
+
+		$ids = array();
+		foreach ( is_array( $rows ) ? $rows : array() as $row ) {
+			if ( self::is_json_data( (string) ( $row['source_context'] ?? '' ) ) ) {
+				$ids[] = (int) $row['id'];
+			}
+		}
+		if ( empty( $ids ) ) {
+			return 0;
+		}
+
+		$now     = current_time( 'mysql', true );
+		$retired = 0;
+		foreach ( array_chunk( $ids, 200 ) as $chunk ) {
+			$placeholders = implode( ',', array_fill( 0, count( $chunk ), '%d' ) );
+			$result       = $wpdb->query(
+				// phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- one %d per id, built into $placeholders above.
+				$wpdb->prepare(
+					// phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+					"UPDATE {$table} SET status = 'retired', retired_at = %s WHERE status = 'active' AND id IN ({$placeholders})",
+					$now,
+					...$chunk
+				)
+			);
+			$retired += false === $result ? 0 : (int) $result;
+		}
+
+		if ( $retired > 0 ) {
+			$this->audit->log(
+				'hash_manager',
+				'hashes_retired_json_data',
+				sprintf(
+					'Retired %d hash(es) of JSON data blocks, such as JSON-LD schema markup. CSP does not apply to those blocks, so their hashes only used up the policy header\'s size budget.',
+					$retired
+				),
+				'info'
+			);
+		}
+
+		return $retired;
+	}
+
+	/** True when $context opens with a JSON object key -- see retire_json_data_hashes(). */
+	private static function is_json_data( string $context ): bool {
+		return 1 === preg_match( '/^\[?\s*\{\s*"(?:[^"\\\\]|\\\\.)*"\s*:/', $context );
+	}
+
+	/**
 	 * Returns all active hashes for a surface as 'sha256-{b64}' strings.
 	 */
 	public function get_active_hashes( string $surface, string $directive ): array {
