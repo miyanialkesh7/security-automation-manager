@@ -192,6 +192,31 @@ class VersionConsistencyTest extends TestCase {
 	}
 
 	/**
+	 * The two names differ on purpose. The plugin header's Plugin Name is
+	 * what wp-admin's Plugins and Updates screens show, and it matches the
+	 * admin menu and the GitHub-channel update feed. readme.txt's title is
+	 * the WordPress.org directory listing's name, which WordPress.org's
+	 * plugin review proposed as "VCNS Security Automation Manager" (PR #288,
+	 * alongside the vcns-security-automation-manager slug). Plugin Check
+	 * reports the difference as a mismatched_plugin_name warning. Change the
+	 * readme title only with the plugins team's agreement.
+	 */
+	public function test_admin_name_and_directory_name_are_the_agreed_ones(): void {
+		$root = dirname( __DIR__, 2 );
+
+		$this->assertSame(
+			'Security Automation Manager',
+			$this->extract_plugin_header_field( $root . '/security-automation-manager.php', 'Plugin Name' ),
+			'The Plugin Name header is the name wp-admin\'s Plugins screen shows, and it deliberately omits "VCNS".'
+		);
+		$this->assertStringStartsWith(
+			"=== VCNS Security Automation Manager ===\n",
+			str_replace( "\r\n", "\n", $this->read_file( $root . '/readme.txt' ) ),
+			'readme.txt\'s title is the WordPress.org listing name the plugin review proposed. Change it only with the plugins team\'s agreement.'
+		);
+	}
+
+	/**
 	 * WordPress.org's own readme parser caps the "== Changelog ==" section
 	 * at 5,000 words and silently truncates anything past that -- surfaced
 	 * as an authors/committers-only warning banner on the plugin's SVN

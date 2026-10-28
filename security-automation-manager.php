@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name:       VCNS Security Automation Manager
+ * Plugin Name:       Security Automation Manager
  * Plugin URI:        https://github.com/vcns/security-automation-manager
  * Description:       Self-learning security headers, built-in attack detection and rate limiting, file-integrity monitoring, and free TLS certificates. No paywall.
  * Version:           2.11.6
