@@ -99,9 +99,57 @@ class CountryGroupsTest extends TestCase {
 	public function test_sanctions_groups_never_include_ukraine_or_syria_on_the_ofac_list(): void {
 		foreach ( $this->groups_in( 'sanctions' ) as $key => $group ) {
 			$this->assertNotContains( 'UA', $group['codes'], "{$key} must not over-block Ukraine for Crimea/DNR/LNR." );
-			$this->assertStringContainsString( 'Crimea', $group['note'] );
+		}
+		// Every authority with measures on Crimea and the other Russian-controlled
+		// areas says why Ukraine itself isn't ticked.
+		foreach ( array( 'eu-sanctions', 'uk-sanctions', 'us-ofac-comprehensive', 'us-ofac-programs', 'ch-sanctions', 'li-sanctions', 'no-sanctions', 'ca-sanctions', 'au-sanctions', 'jp-sanctions' ) as $key ) {
+			$this->assertStringContainsString( 'Crimea', Country_Groups::all()[ $key ]['note'], $key );
 		}
 		$this->assertEqualsCanonicalizing( array( 'CU', 'IR', 'KP' ), $this->codes_of( 'us-ofac-comprehensive' ) );
+	}
+
+	public function test_every_sanctions_group_says_where_it_applies_and_no_other_group_does(): void {
+		$known = array_keys( Iso_Countries::all() );
+		foreach ( Country_Groups::all() as $key => $group ) {
+			if ( 'sanctions' !== $group['category'] ) {
+				$this->assertSame( array(), $group['applies_in'], "{$key} is not a sanctions list, so it is never narrowed." );
+				continue;
+			}
+			$this->assertNotEmpty( $group['applies_in'], "{$key} has no applies_in, so it would never be offered." );
+			$this->assertSame( array(), array_diff( $group['applies_in'], $known ), "{$key} applies_in has an unknown code." );
+			$this->assertSame( count( $group['applies_in'] ), count( array_unique( $group['applies_in'] ) ), "{$key} applies_in has a duplicate." );
+		}
+		$this->assertEqualsCanonicalizing( $known, Country_Groups::all()['un-sanctions']['applies_in'] );
+	}
+
+	/**
+	 * @dataProvider site_country_provider
+	 */
+	public function test_by_category_offers_only_the_sanctions_lists_that_bind_the_site_country( string $site_country, array $expected ): void {
+		$categories = Country_Groups::by_category( $site_country );
+
+		$this->assertEqualsCanonicalizing( $expected, array_keys( $categories['sanctions']['groups'] ) );
+		// Non-sanctions groups are never narrowed.
+		$this->assertSame( array_keys( Country_Groups::by_category()['blocs']['groups'] ), array_keys( $categories['blocs']['groups'] ) );
+	}
+
+	public static function site_country_provider(): array {
+		return array(
+			'France: UN and EU'                      => array( 'FR', array( 'un-sanctions', 'eu-sanctions' ) ),
+			'French Guiana is in the EU'             => array( 'GF', array( 'un-sanctions', 'eu-sanctions' ) ),
+			'United Kingdom: UN and UK'              => array( 'GB', array( 'un-sanctions', 'uk-sanctions' ) ),
+			'Jersey applies UK sanctions'            => array( 'JE', array( 'un-sanctions', 'uk-sanctions' ) ),
+			'Gibraltar applies UK and EU sanctions'  => array( 'GI', array( 'un-sanctions', 'uk-sanctions', 'eu-sanctions' ) ),
+			'Puerto Rico: both OFAC lists'           => array( 'PR', array( 'un-sanctions', 'us-ofac-comprehensive', 'us-ofac-programs' ) ),
+			'Liechtenstein: its own and the Swiss'   => array( 'LI', array( 'un-sanctions', 'li-sanctions', 'ch-sanctions' ) ),
+			'Svalbard applies Norway\'s'             => array( 'SJ', array( 'un-sanctions', 'no-sanctions' ) ),
+			'Norfolk Island applies Australia\'s'    => array( 'NF', array( 'un-sanctions', 'au-sanctions' ) ),
+			'Brazil: the UN list only'               => array( 'BR', array( 'un-sanctions' ) ),
+		);
+	}
+
+	public function test_no_site_country_offers_every_sanctions_list(): void {
+		$this->assertSame( array_keys( $this->groups_in( 'sanctions' ) ), array_keys( Country_Groups::by_category()['sanctions']['groups'] ) );
 	}
 
 	public function test_by_category_returns_every_group_once_in_category_order(): void {

@@ -73,6 +73,7 @@ $wp_sam_options = array(
 	'wp_sam_cert_last_run',
 	'wp_sam_update_diagnostics',
 	'wp_sam_own_addresses',
+	'wp_sam_site_country',
 );
 
 // Extension-owned option names (e.g. a paid automation mode's own
