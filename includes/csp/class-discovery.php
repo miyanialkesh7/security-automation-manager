@@ -421,7 +421,7 @@ class Discovery {
 	 */
 	private function get_crawl_urls( string $surface ): array {
 		return match ( $surface ) {
-			'frontend' => array( get_home_url( '/' ) ),
+			'frontend' => array( home_url( '/' ) ),
 			// No admin_url() target: an anonymous wp_remote_get() to wp-admin
 			// never sees real admin content -- WordPress redirects a logged-out
 			// request to wp-login.php, which the 'login' surface already crawls
