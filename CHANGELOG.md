@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows semantic versioning for plugin releases.
 
+## [2.11.6] - 2026-10-27
+
+### Fixed
+
+- **Loopback and private-network addresses are never escalated or blocked automatically** (#455). Only `127.0.0.0/8` and `::1` had been treated as this server. A site whose own requests reach it through an internal address was rate-limited, escalated and counted into campaigns like any stranger. On staging, WP-Cron and SAM self-fetches arrive from `10.16.17.55`. So Traffic Guard could block the site's own cron, health checks or load balancer.
+  - New `Cidr_Matcher::LOCAL_CIDRS` / `is_local()` covers loopback, RFC 1918, RFC 6598 shared space, IPv4/IPv6 link-local and IPv6 unique local addresses.
+  - `Traffic_Guard::decide()` lets these addresses through after the explicit IP-rule check; an administrator's explicit block rule still applies.
+  - `Traffic_Block_Store::record_violation()`, which every automatic escalation goes through, never escalates them.
+  - `Identity_Resolver` records them in the auto-authorised `loopback` state, now labelled "This server or private network".
+  - `Campaign_Detector::external_ips()` leaves them out of campaign counts, the IP list and campaign blocks.
+  - Public addresses of a site's own servers still need an Allow rule.
+
+### Changed
+
+- **Identities tooltip groups repeated recent paths** (#454), in first-seen order with a count (e.g. `/wp-cron.php ×9, /robots.txt`). The line under the classification gives the request count and, where they differ, the number of distinct paths. Previously the tooltip listed every request, so a site's WP-Cron loopback repeated `/wp-cron.php` ten times.
+
 ## [2.11.5] - 2026-10-23
 
 ### Security

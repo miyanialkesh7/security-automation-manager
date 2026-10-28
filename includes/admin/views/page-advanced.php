@@ -131,7 +131,7 @@ $tab_help = array(
 				// administrator deciding whether to block should see the
 				// same list the block action would actually act on, not a
 				// possibly-stale count from when the row was last detected.
-				$participant_ips = $event_store->distinct_ips( (string) $campaign['detector_id'], (string) $campaign['surface'], Campaign_Detector::DEFAULT_WINDOW_HOURS );
+				$participant_ips = Campaign_Detector::external_ips( $event_store->distinct_ips( (string) $campaign['detector_id'], (string) $campaign['surface'], Campaign_Detector::DEFAULT_WINDOW_HOURS ) );
 				$blockable_ips   = Campaign_Detector::blockable_ips( $participant_ips, $viewer_ip );
 				$ips_shown       = array_slice( $participant_ips, 0, 100 );
 				$ips_remaining   = count( $participant_ips ) - count( $ips_shown );

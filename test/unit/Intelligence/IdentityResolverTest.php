@@ -237,4 +237,14 @@ class IdentityResolverTest extends TestCase {
 		$this->assertSame( '', $result['hostname'] );
 		$this->assertFalse( $result['suffix_match'] );
 	}
+
+	public function test_resolve_treats_a_private_network_address_as_this_server(): void {
+		$resolver = $this->resolver_with_vendors( array() );
+
+		$result = $resolver->resolve( '10.16.17.55', 'WordPress/7.1.3; https://staging.example.com' );
+
+		$this->assertSame( 'loopback', $result['verification_state'] );
+		$this->assertSame( '', $result['claimed_identity'] );
+	}
+
 }

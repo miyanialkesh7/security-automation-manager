@@ -126,4 +126,32 @@ class CampaignDetectorTest extends TestCase {
 		$this->assertCount( 1, $GLOBALS['_wpdb_inserted_rows'] );
 		$this->assertSame( '203.0.113.1', $GLOBALS['_wpdb_inserted_rows'][0]['data']['cidr'] );
 	}
+
+	public function test_scan_does_not_count_private_network_participants(): void {
+		$GLOBALS['_wpdb_get_results'] = array(
+			array(
+				'detector_id'     => 'custom_5',
+				'detector_family' => 'custom',
+				'surface'         => 'frontend',
+			),
+		);
+		// 9 public sources plus 3 of this site's own internal addresses:
+		// below the 10-participant threshold once the internal ones are dropped.
+		$GLOBALS['_wpdb_get_col'] = array_merge(
+			array_map( static fn( int $i ): string => "203.0.113.{$i}", range( 1, 9 ) ),
+			array( '10.16.17.55', '172.20.0.5', '127.0.0.1' )
+		);
+
+		$result = $this->detector->scan( 24, 10 );
+
+		$this->assertSame( 0, $result['campaigns_detected'] );
+	}
+
+	public function test_blockable_ips_excludes_private_network_addresses(): void {
+		$this->assertSame(
+			array( '203.0.113.1' ),
+			Campaign_Detector::blockable_ips( array( '203.0.113.1', '10.16.17.55', '192.168.1.10', 'fd12:3456::1' ), '' )
+		);
+	}
+
 }

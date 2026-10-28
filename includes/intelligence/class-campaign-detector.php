@@ -54,7 +54,7 @@ final class Campaign_Detector {
 			$detector_id = (string) $combo['detector_id'];
 			$surface     = (string) $combo['surface'];
 
-			$ips = $this->events->distinct_ips( $detector_id, $surface, $window_hours );
+			$ips = self::external_ips( $this->events->distinct_ips( $detector_id, $surface, $window_hours ) );
 			if ( count( $ips ) < $min_participants ) {
 				continue;
 			}
@@ -77,7 +77,8 @@ final class Campaign_Detector {
 
 	/**
 	 * The live participant IPs a campaign block would actually act on:
-	 * never the acting administrator's own IP, nor a loopback address. An
+	 * never the acting administrator's own IP, nor a loopback or
+	 * private-network address (see external_ips()). An
 	 * explicit sam_ip_rules block applies even to a logged-in admin, so
 	 * without this, an admin whose own IP had tripped the same detector
 	 * (e.g. while testing) would lock themselves out of every surface,
@@ -89,8 +90,27 @@ final class Campaign_Detector {
 	public static function blockable_ips( array $ips, string $actor_ip ): array {
 		return array_values(
 			array_filter(
+				self::external_ips( $ips ),
+				static fn( string $ip ): bool => $ip !== $actor_ip
+			)
+		);
+	}
+
+	/**
+	 * Drops loopback and private-network addresses (Cidr_Matcher::is_local())
+	 * from a participant list. Those are this site's own servers, containers
+	 * or load balancers -- e.g. WP-Cron or a security plugin's scan
+	 * requesting this site's own URLs -- so they are neither counted toward
+	 * a campaign nor offered for blocking.
+	 *
+	 * @param array<int, string> $ips
+	 * @return array<int, string>
+	 */
+	public static function external_ips( array $ips ): array {
+		return array_values(
+			array_filter(
 				$ips,
-				static fn( string $ip ): bool => $ip !== $actor_ip && ! Cidr_Matcher::ip_in_any_cidr( $ip, Cidr_Matcher::LOOPBACK_CIDRS )
+				static fn( string $ip ): bool => ! Cidr_Matcher::is_local( $ip )
 			)
 		);
 	}
