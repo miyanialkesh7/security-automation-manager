@@ -481,7 +481,7 @@ $tab_help = array(
 			<?php $geo_store = new Geo_Ip_Store(); ?>
 
 			<p class="description">
-				<?php esc_html_e( 'Opt-in, using your own IPinfo (ipinfo.io) account -- never a shared VCNS credential. Disabled until you add a token below. MaxMind support is a deliberate later decision, not built yet -- its free tier is a downloaded database, not a live lookup service.', 'vcns-security-automation-manager' ); ?>
+				<?php esc_html_e( 'Opt-in, using your own IPinfo (ipinfo.io) account -- never a shared credential. Disabled until you add a token below. MaxMind support is a deliberate later decision, not built yet -- its free tier is a downloaded database, not a live lookup service.', 'vcns-security-automation-manager' ); ?>
 				<?php if ( ! $geo_store->is_configured() ) : ?>
 				<a href="https://ipinfo.io/signup" target="_blank" rel="noopener noreferrer"><?php esc_html_e( "Don't have a token? Sign up free at ipinfo.io.", 'vcns-security-automation-manager' ); ?></a>
 				<?php endif; ?>

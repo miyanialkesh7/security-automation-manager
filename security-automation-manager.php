@@ -195,7 +195,7 @@ define( 'WP_SAM_VERSION', '2.11.6' );
  *        Controls, .roadmap/phase3_early_plan.md §13.4). Entirely opt-in
  *        and bring-your-own-credentials -- disabled until an
  *        administrator enters their own IPinfo API token, sealed via
- *        Credential_Vault, never a shared VCNS credential. MaxMind
+ *        Credential_Vault, never a shared credential. MaxMind
  *        support deliberately deferred (its free tier is a downloaded
  *        binary database, not a live API -- see Intelligence\Geo_Ip_
  *        Store's own docblock). Observation only, and Geo-IP blocking is
