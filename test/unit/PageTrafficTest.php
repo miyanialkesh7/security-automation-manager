@@ -215,6 +215,22 @@ class PageTrafficTest extends TestCase {
 
 	// ── Network Intelligence tab -- Geo-IP sub-tab's Country Block List ─────
 
+	/**
+	 * The grid has to grow downwards. A height cap on a multi-column box
+	 * adds overflow columns to the right instead of scrolling, and with a
+	 * 4-column cap as well it hid most countries behind a horizontal
+	 * scrollbar and left a wide empty band in every column.
+	 */
+	public function test_country_grid_css_has_no_height_or_column_count_cap(): void {
+		$css = (string) file_get_contents( WP_SAM_DIR . 'assets/css/admin.css' );
+
+		$this->assertSame( 1, preg_match( '/^\.wp-sam-country-grid \{([^}]*)\}/m', $css, $rule ) );
+		$this->assertStringContainsString( 'column-width', $rule[1] );
+		$this->assertStringNotContainsString( 'max-height', $rule[1] );
+		$this->assertStringNotContainsString( 'column-count', $rule[1] );
+		$this->assertDoesNotMatchRegularExpression( '/\bcolumns:/', $rule[1] );
+	}
+
 	public function test_geoip_subtab_renders_country_grid_with_nothing_blocked(): void {
 		$_GET['tab']    = 'network-intelligence';
 		$_GET['subtab'] = 'geoip';
