@@ -231,6 +231,46 @@ class PageTrafficTest extends TestCase {
 		$this->assertDoesNotMatchRegularExpression( '/\bcolumns:/', $rule[1] );
 	}
 
+	private function render_geoip_subtab(): string {
+		$_GET['tab']                  = 'network-intelligence';
+		$_GET['subtab']               = 'geoip';
+		$GLOBALS['_wpdb_get_results'] = array();
+
+		ob_start();
+		require WP_SAM_DIR . 'includes/admin/views/page-traffic.php';
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['tab'], $_GET['subtab'] );
+		return $output;
+	}
+
+	public function test_geoip_subtab_offers_every_sanctions_list_until_a_site_country_is_chosen(): void {
+		$output = $this->render_geoip_subtab();
+
+		$this->assertStringContainsString( 'Where does this website operate?', $output );
+		$this->assertStringContainsString( 'name="action" value="wp_sam_site_country_save"', $output );
+		$this->assertStringContainsString( '<select id="wp-sam-site-country-select" name="site_country"', $output );
+		$this->assertStringContainsString( 'Not chosen: offer every sanctions list', $output );
+		foreach ( array( 'un-sanctions', 'eu-sanctions', 'uk-sanctions', 'us-ofac-comprehensive', 'jp-sanctions' ) as $key ) {
+			$this->assertStringContainsString( 'value="' . $key . '"', $output );
+		}
+		$this->assertStringNotContainsString( 'narrowed to those that bind', $output );
+	}
+
+	public function test_geoip_subtab_narrows_the_sanctions_lists_to_the_site_country(): void {
+		update_option( 'wp_sam_site_country', 'FR' );
+
+		$output = $this->render_geoip_subtab();
+
+		$this->assertStringContainsString( "value=\"FR\" selected='selected'", $output );
+		$this->assertStringContainsString( 'value="un-sanctions"', $output );
+		$this->assertStringContainsString( 'value="eu-sanctions"', $output );
+		$this->assertStringNotContainsString( 'value="uk-sanctions"', $output );
+		$this->assertStringNotContainsString( 'data-wp-sam-country-group-details="uk-sanctions"', $output );
+		$this->assertStringContainsString( 'value="eu"', $output, 'Blocs and regions are never narrowed.' );
+		$this->assertStringContainsString( 'Sanctions lists are narrowed to those that bind in France.', $output );
+	}
+
 	public function test_geoip_subtab_renders_country_grid_with_nothing_blocked(): void {
 		$_GET['tab']    = 'network-intelligence';
 		$_GET['subtab'] = 'geoip';

@@ -98,6 +98,7 @@ use WP_SAM\Intelligence\Own_Address_Store;
 use WP_SAM\Intelligence\Recommendation_Dismissal_Store;
 use WP_SAM\Intelligence\Robots_Rules_Store;
 use WP_SAM\Intelligence\Security_Txt_Store;
+use WP_SAM\Intelligence\Site_Country;
 use WP_SAM\Intelligence\Tor_Exit_List_Store;
 use WP_SAM\Intelligence\Scanner_Identity_Store;
 use WP_SAM\Intelligence\Scanner_Vendor_Store;
@@ -202,6 +203,7 @@ class Admin_UI {
 		add_action( 'admin_post_wp_sam_cache_control_cdn_acknowledge', array( $this, 'handle_cache_control_cdn_acknowledge' ) );
 		add_action( 'admin_post_wp_sam_geoip_save_token', array( $this, 'handle_geoip_save_token' ) );
 		add_action( 'admin_post_wp_sam_geoip_country_block_save', array( $this, 'handle_geoip_country_block_save' ) );
+		add_action( 'admin_post_wp_sam_site_country_save', array( $this, 'handle_site_country_save' ) );
 		add_action( 'admin_post_wp_sam_network_rule_add', array( $this, 'handle_network_rule_add' ) );
 		add_action( 'admin_post_wp_sam_network_rule_delete', array( $this, 'handle_network_rule_delete' ) );
 		add_action( 'admin_post_wp_sam_agents_rules_refresh', array( $this, 'handle_agents_rules_refresh' ) );
@@ -1933,6 +1935,24 @@ class Admin_UI {
 		}
 
 		wp_safe_redirect( admin_url( 'admin.php?page=security-automation-manager-traffic&tab=network-intelligence&subtab=geoip' ) );
+		exit;
+	}
+
+	/**
+	 * Saves "Where does this website operate?" on the Geo-IP sub-tab, which
+	 * only narrows the sanctions lists the Country Block List's "Select by
+	 * group" offers (see Site_Country). An unknown code is ignored and the
+	 * previous choice kept.
+	 */
+	public function handle_site_country_save(): void {
+		check_admin_referer( 'wp_sam_site_country_save' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to change Geo-IP settings.', 'vcns-security-automation-manager' ) );
+		}
+
+		Site_Country::save( sanitize_text_field( wp_unslash( $_POST['site_country'] ?? '' ) ) );
+
+		wp_safe_redirect( admin_url( 'admin.php?page=security-automation-manager-traffic&tab=network-intelligence&subtab=geoip#wp-sam-site-country' ) );
 		exit;
 	}
 

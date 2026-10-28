@@ -432,6 +432,7 @@ class Activator {
 			'wp_sam_geoip_provider',
 			'wp_sam_geoip_ipinfo_token',
 			'wp_sam_own_addresses',
+			'wp_sam_site_country',
 		);
 	}
 

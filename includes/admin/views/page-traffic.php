@@ -38,6 +38,7 @@ use WP_SAM\Intelligence\Own_Address_Store;
 use WP_SAM\Intelligence\Robots_Rules_Store;
 use WP_SAM\Intelligence\Scanner_Identity_Store;
 use WP_SAM\Intelligence\Security_Txt_Store;
+use WP_SAM\Intelligence\Site_Country;
 use WP_SAM\Intelligence\Tor_Exit_List_Store;
 use WP_SAM\Intelligence\Traffic_Block_Store;
 use WP_SAM\Intelligence\Traffic_Policy_Store;
@@ -585,6 +586,28 @@ $tab_help = array(
 				<?php esc_html_e( 'Every country defaults to Allow. Tick a country to Block it -- nothing changes until you click Save below.', 'vcns-security-automation-manager' ); ?>
 			</p>
 
+			<?php
+			// A separate form, because "Select by group" below sits inside the
+			// Country Block List's own form. Saving this only changes which
+			// sanctions lists that control offers -- see Site_Country.
+			$geoip_site_country = Site_Country::get();
+			?>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" id="wp-sam-site-country" style="margin-top:1em">
+				<?php wp_nonce_field( 'wp_sam_site_country_save' ); ?>
+				<input type="hidden" name="action" value="wp_sam_site_country_save" />
+				<label for="wp-sam-site-country-select"><strong><?php esc_html_e( 'Where does this website operate?', 'vcns-security-automation-manager' ); ?></strong></label>
+				<select id="wp-sam-site-country-select" name="site_country" aria-describedby="wp-sam-site-country-help">
+					<option value=""><?php esc_html_e( '— Not chosen: offer every sanctions list —', 'vcns-security-automation-manager' ); ?></option>
+					<?php foreach ( Iso_Countries::all() as $code => $name ) : ?>
+					<option value="<?php echo esc_attr( $code ); ?>"<?php selected( $geoip_site_country, $code ); ?>><?php echo esc_html( $name ); ?></option>
+					<?php endforeach; ?>
+				</select>
+				<?php submit_button( __( 'Save', 'vcns-security-automation-manager' ), 'secondary', 'submit', false ); ?>
+				<p class="description" id="wp-sam-site-country-help">
+					<?php esc_html_e( 'Narrows the sanctions lists offered under "Select by group" to the UN list and the lists that bind in that country -- the EU\'s for France, the UK\'s for Jersey. It never blocks anything itself. Sanctions also follow people and companies, not only places: a site run by a US company, or by a UK national living abroad, may be bound by their own country\'s lists as well, so leave this unchosen to see every list.', 'vcns-security-automation-manager' ); ?>
+				</p>
+			</form>
+
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:1em">
 				<?php wp_nonce_field( 'wp_sam_geoip_country_block_save' ); ?>
 				<input type="hidden" name="action" value="wp_sam_geoip_country_block_save" />
@@ -606,13 +629,21 @@ $tab_help = array(
 				// thing handle_geoip_country_block_save() ever sees.
 				$geoip_country_names    = Iso_Countries::all();
 				$geoip_ticked_count     = count( array_intersect( array_keys( $geoip_country_names ), $geoip_checked_codes ) );
-				$geoip_group_categories = Country_Groups::by_category();
+				$geoip_group_categories = Country_Groups::by_category( $geoip_site_country );
 				?>
 				<div class="wp-sam-country-groups" id="wp-sam-country-groups">
 					<h4 style="margin:0 0 .5em"><?php esc_html_e( 'Select by group', 'vcns-security-automation-manager' ); ?></h4>
 					<p class="description" style="margin-top:0">
 						<?php esc_html_e( 'A shortcut for ticking many countries at once. Choosing a group only ticks or unticks its countries in the list below -- every country stays individually editable, and nothing is blocked until you click Save. Group lists are bundled with SAM as a snapshot (each shows its source and as-of date) and are never updated automatically.', 'vcns-security-automation-manager' ); ?>
 					</p>
+					<?php if ( '' !== $geoip_site_country ) : ?>
+					<p class="description">
+						<?php
+						/* translators: %s: country name, e.g. "France". */
+						echo esc_html( sprintf( __( 'Sanctions lists are narrowed to those that bind in %s. Change "Where does this website operate?" above to see others.', 'vcns-security-automation-manager' ), $geoip_country_names[ $geoip_site_country ] ) );
+						?>
+					</p>
+					<?php endif; ?>
 					<label for="wp-sam-country-group-select"><?php esc_html_e( 'Group', 'vcns-security-automation-manager' ); ?></label>
 					<select id="wp-sam-country-group-select" aria-describedby="wp-sam-country-group-details">
 						<option value=""><?php esc_html_e( '— Choose a group —', 'vcns-security-automation-manager' ); ?></option>
