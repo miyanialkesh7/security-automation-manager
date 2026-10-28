@@ -385,4 +385,56 @@ class PageTrafficTest extends TestCase {
 		$this->assertStringContainsString( 'confirm_lockout_risk', $output );
 		$this->assertStringContainsString( 'value="CN"', $output );
 	}
+
+	public function test_ip_rules_tab_shows_the_own_addresses_form_with_saved_entries(): void {
+		$_GET['tab'] = 'ip-rules';
+		\WP_SAM\Intelligence\Own_Address_Store::save( "185.199.223.7\n203.0.113.32/28" );
+		$GLOBALS['_wpdb_get_results'] = array();
+		$GLOBALS['_wpdb_get_col']     = array();
+
+		ob_start();
+		require WP_SAM_DIR . 'includes/admin/views/page-traffic.php';
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['tab'] );
+
+		$this->assertStringContainsString( 'id="wp-sam-own-addresses"', $output );
+		$this->assertStringContainsString( 'wp_sam_own_addresses_save', $output );
+		$this->assertStringContainsString( "185.199.223.7\n203.0.113.32/28</textarea>", $output );
+		$this->assertStringNotContainsString( 'Seen calling /wp-cron.php', $output );
+	}
+
+	public function test_ip_rules_tab_suggests_wp_cron_callers_not_yet_listed(): void {
+		$_GET['tab'] = 'ip-rules';
+		\WP_SAM\Intelligence\Own_Address_Store::save( '185.177.72.38' );
+		$GLOBALS['_wpdb_get_results'] = array();
+		$GLOBALS['_wpdb_get_col']     = array( '185.199.223.7', '185.177.72.38' );
+
+		ob_start();
+		require WP_SAM_DIR . 'includes/admin/views/page-traffic.php';
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['tab'] );
+
+		$this->assertStringContainsString( 'Seen calling /wp-cron.php in the last 30 days: <code>185.199.223.7</code>.', $output );
+	}
+
+	public function test_ip_rules_tab_lists_entries_that_were_not_saved_once(): void {
+		$_GET['tab'] = 'ip-rules';
+		$GLOBALS['_wpdb_get_results'] = array();
+		$GLOBALS['_wpdb_get_col']     = array();
+		set_transient(
+			'wp_sam_own_addresses_rejected_' . get_current_user_id(),
+			array( array( 'entry' => '0.0.0.0/0', 'reason' => 'Too broad: the widest range accepted is /16.' ) )
+		);
+
+		ob_start();
+		require WP_SAM_DIR . 'includes/admin/views/page-traffic.php';
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['tab'] );
+
+		$this->assertStringContainsString( '<code>0.0.0.0/0</code> -- Too broad', $output );
+		$this->assertFalse( get_transient( 'wp_sam_own_addresses_rejected_' . get_current_user_id() ) );
+	}
 }

@@ -223,7 +223,10 @@ final class Traffic_Guard {
 		// automatic traffic protection at all. That is a deployment-
 		// topology caveat inherent to Ip_Resolver's trust model, not
 		// something this exemption introduces or can detect from here.
-		if ( Cidr_Matcher::is_local( $ip ) ) {
+		// The same applies to a public address the administrator has listed
+		// as this site's own (Own_Address_Store), such as a container that
+		// reaches the site through its host's public IP.
+		if ( Own_Address_Store::includes( $ip ) ) {
 			return $allow;
 		}
 

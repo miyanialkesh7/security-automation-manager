@@ -87,7 +87,8 @@ final class Traffic_Block_Store {
 	 * @return array<string, mixed>
 	 */
 	public function record_violation( string $ip, string $surface, string $reason ): array {
-		if ( Cidr_Matcher::is_local( $ip ) ) {
+		// Also covers addresses declared as this site's own (Own_Address_Store).
+		if ( Own_Address_Store::includes( $ip ) ) {
 			return array();
 		}
 

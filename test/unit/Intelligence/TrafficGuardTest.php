@@ -305,4 +305,27 @@ class TrafficGuardTest extends TestCase {
 		$this->assertSame( 'ip_rule_block', $verdict['reason'] );
 	}
 
+	// ── This site's own addresses ─────────────────────────────────────────────
+
+	public function test_a_declared_own_public_address_is_never_blocked_by_automatic_escalation(): void {
+		\WP_SAM\Intelligence\Own_Address_Store::save( '185.199.223.7' );
+		$GLOBALS['_wpdb_get_results'] = array(); // No IP rules.
+		$GLOBALS['_wpdb_get_row']     = $this->block_row( array( 'ip' => '185.199.223.7' ) ); // Even an existing block row is ignored.
+
+		$verdict = $this->guard->decide( '185.199.223.7', 'frontend', false );
+
+		$this->assertSame( 'allow', $verdict['action'] );
+		$this->assertFalse( $verdict['would_block'] );
+	}
+
+	public function test_explicit_block_rule_still_applies_to_a_declared_own_address(): void {
+		\WP_SAM\Intelligence\Own_Address_Store::save( '185.199.223.7' );
+		$GLOBALS['_wpdb_get_results'] = array(
+			array( 'id' => 1, 'list_type' => 'block', 'cidr' => '185.199.223.7', 'surface' => '', 'expires_at' => null ),
+		);
+
+		$verdict = $this->guard->decide( '185.199.223.7', 'frontend', false );
+
+		$this->assertSame( 'block', $verdict['action'] );
+	}
 }
