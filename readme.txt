@@ -4,7 +4,7 @@ Tags: security, csp, content security policy, hsts, ssl certificates
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 2.11.4
+Stable tag: 2.11.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -119,6 +119,19 @@ When an administrator configures automatic cPanel deployment, once a certificate
 
 == Changelog ==
 
+= 2.11.6 =
+
+* Fixed: requests from your own hosting network -- this server reaching itself through an internal address, a sibling container, a load balancer or a health check (private addresses such as 10.x, 172.16-31.x and 192.168.x) -- are no longer rate-limited, escalated or blocked automatically, and no longer count toward campaigns. Previously the plugin could block your own site's scheduled tasks. An IP block rule you add yourself still applies.
+* Improved: on Observe → Continuous Intelligence → Identities, a source's recent requests now group repeated paths with a count (for example "/wp-cron.php ×9") instead of listing the same path again and again.
+
+= 2.11.5 =
+
+* Security: closed a way for a visitor to slip past Traffic Controls (rate limits and IP blocks) and go unrecorded by the attack detectors by sending a particular request header. Updating is recommended.
+* Fixed: the Advanced Intelligence page loaded without the plugin's styles and scripts. Its info pop-ups all showed at once, stacked down the page, and the Campaigns Acknowledge, Dismiss and Block buttons did nothing.
+* Fixed: info pop-ups across the plugin's screens could show their text in the wrong font or be cut off at the bottom of a table.
+* Changed: Advanced Intelligence is no longer a separate menu item. Each of its sections now sits with the step it belongs to: Timeline under Observe, Campaigns under Decide, Honey Paths under Control, and Change Windows under Verify.
+* Improved: plugin notices now include a link to the place where you can act on them, and messages that point you somewhere now name the menu route (for example "Decide → Dependency Classification").
+
 = 2.11.4 =
 
 * Fixed: the Content Security Policy for your WordPress dashboard (the admin surface) is now actually sent. Earlier versions never delivered it on ordinary dashboard pages, so "no violations reported" there meant nothing. If your admin policy was set to Enforce, it has been moved back to Report-only once, so you can review its real reports before promoting it again.
@@ -181,13 +194,5 @@ When an administrator configures automatic cPanel deployment, once a certificate
 = 2.9.102 =
 
 * Added: Recommendations Engine (Phase 4F) -- foundation increment. A new "Recommendations" tab on Settings/Overview, right after Security Health, for prioritised, evidence-backed suggestions drawn from what this plugin already observes. Nothing is ever applied automatically; every suggestion links to where to act on it, and can be dismissed with a reason until the underlying evidence actually changes. This increment ships the engine and admin UI with no rules registered yet -- concrete rules (certificate renewal, unexplained drift, expiring exceptions, and more) land in the following increments.
-
-= 2.9.101 =
-
-* Added: Continuous Intelligence's bot/crawler classification gains a "repeated errors" signal (Phase 4C carried-forward item, the second and last of the two named alongside "timing") -- an unrecognised source whose recent requests were disproportionately HTTP errors (most often 404) is now classified as "Error probing (repeated 4xx/5xx)" on the Identities tab, the classic signature of a scanner probing for paths that don't exist or aren't allowed. Independent of enumeration and timing -- a source can be flagged for any of the three without the others.
-
-= 2.9.100 =
-
-* Added: Continuous Intelligence's bot/crawler classification gains a "timing" signal (Phase 4C carried-forward item) -- an unrecognised source whose last several requests arrived at a suspiciously uniform interval (a script sleeping a fixed duration between requests, rather than a person's naturally irregular browsing) is now classified as "Scripted timing (uniform request interval)" on the Identities tab. Independent of the existing sequential-path-enumeration signal -- a source can be flagged for one without needing the other.
 
 Full changelog history: https://github.com/vcns/security-automation-manager/blob/main/CHANGELOG.md
