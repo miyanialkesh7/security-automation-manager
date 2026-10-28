@@ -33,7 +33,9 @@ use WP_SAM\Intelligence\Humans_Txt_Store;
 use WP_SAM\Intelligence\Ip_Rule_Store;
 use WP_SAM\Intelligence\Iso_Countries;
 use WP_SAM\Intelligence\Network_Rule_Store;
+use WP_SAM\Intelligence\Own_Address_Store;
 use WP_SAM\Intelligence\Robots_Rules_Store;
+use WP_SAM\Intelligence\Scanner_Identity_Store;
 use WP_SAM\Intelligence\Security_Txt_Store;
 use WP_SAM\Intelligence\Tor_Exit_List_Store;
 use WP_SAM\Intelligence\Traffic_Block_Store;
@@ -247,6 +249,51 @@ $tab_help = array(
 				</tr>
 			</table>
 			<?php submit_button( __( 'Add rule', 'vcns-security-automation-manager' ) ); ?>
+		</form>
+
+		<?php
+		$own_addresses = Own_Address_Store::all();
+		$own_rejected  = get_transient( 'wp_sam_own_addresses_rejected_' . get_current_user_id() );
+		if ( false !== $own_rejected ) {
+			delete_transient( 'wp_sam_own_addresses_rejected_' . get_current_user_id() );
+		}
+		$own_suggested = array_values( array_diff( ( new Scanner_Identity_Store() )->recent_wp_cron_callers(), $own_addresses ) );
+		?>
+		<h2 id="wp-sam-own-addresses" style="margin-top:2em"><?php esc_html_e( 'This site\'s own addresses', 'vcns-security-automation-manager' ); ?></h2>
+		<p class="description" style="max-width:700px">
+			<?php esc_html_e( 'If this site\'s own servers or containers reach it through a public IP address, list those addresses here. They are then treated like a private address: never rate-limited or blocked automatically, never counted into a campaign, and shown on Observe → Continuous Intelligence → Identities as this site\'s own. An Allow rule above only stops this page blocking an address; an address listed here also stops showing up as escalating. A Block rule above still applies. Private and loopback addresses (10.x, 172.16-31.x, 192.168.x, 127.x and the IPv6 equivalents) are already covered and don\'t need listing.', 'vcns-security-automation-manager' ); ?>
+		</p>
+		<?php if ( is_array( $own_rejected ) && ! empty( $own_rejected ) ) : ?>
+		<div class="notice notice-warning inline">
+			<p><?php esc_html_e( 'These entries were not saved:', 'vcns-security-automation-manager' ); ?></p>
+			<ul>
+				<?php foreach ( $own_rejected as $rejected ) : ?>
+				<li><code><?php echo esc_html( (string) ( $rejected['entry'] ?? '' ) ); ?></code> -- <?php echo esc_html( (string) ( $rejected['reason'] ?? '' ) ); ?></li>
+				<?php endforeach; ?>
+			</ul>
+		</div>
+		<?php elseif ( isset( $_GET['own_saved'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display-only flag set by our own redirect. ?>
+		<div class="notice notice-success inline"><p><?php esc_html_e( 'Saved.', 'vcns-security-automation-manager' ); ?></p></div>
+		<?php endif; ?>
+		<?php if ( ! empty( $own_suggested ) ) : ?>
+		<p class="description" style="max-width:700px">
+			<?php
+			printf(
+				/* translators: %s: comma-separated IP addresses. */
+				esc_html__( 'Seen calling /wp-cron.php in the last 30 days: %s. WordPress normally only calls that on itself, so these are probably this site\'s own servers. Check each one before adding it: an external cron service calls it too.', 'vcns-security-automation-manager' ),
+				'<code>' . implode( '</code>, <code>', array_map( 'esc_html', $own_suggested ) ) . '</code>' // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- each address is escaped with esc_html().
+			);
+			?>
+		</p>
+		<?php endif; ?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<?php wp_nonce_field( 'wp_sam_own_addresses_save' ); ?>
+			<input type="hidden" name="action" value="wp_sam_own_addresses_save" />
+			<p>
+				<label for="own_addresses"><?php esc_html_e( 'One IP address or CIDR range per line', 'vcns-security-automation-manager' ); ?></label><br />
+				<textarea id="own_addresses" name="own_addresses" rows="4" style="width:100%;max-width:300px" placeholder="203.0.113.10&#10;203.0.113.32/28"><?php echo esc_textarea( implode( "\n", $own_addresses ) ); ?></textarea>
+			</p>
+			<?php submit_button( __( 'Save own addresses', 'vcns-security-automation-manager' ) ); ?>
 		</form>
 
 	<?php elseif ( 'blocks' === $tab ) : ?>

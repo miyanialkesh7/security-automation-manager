@@ -130,6 +130,14 @@ class TrafficBlockStoreTest extends TestCase {
 		$this->assertSame( 6, $updated['occurrence_count'] );
 	}
 
+	public function test_record_violation_never_escalates_a_declared_own_address(): void {
+		\WP_SAM\Intelligence\Own_Address_Store::save( '185.199.223.0/28' );
+
+		$this->assertSame( array(), $this->store->record_violation( '185.199.223.7', 'frontend', 'detector:custom' ) );
+		$this->assertSame( array(), $GLOBALS['_wpdb_inserted_rows'] );
+		$this->assertSame( array(), $GLOBALS['_wpdb_updated_rows'] );
+	}
+
 	public function test_set_persistent_marks_the_row_permanently_blocked(): void {
 		$ok = $this->store->set_persistent( 7, 5 );
 

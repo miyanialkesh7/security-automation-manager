@@ -247,4 +247,11 @@ class IdentityResolverTest extends TestCase {
 		$this->assertSame( '', $result['claimed_identity'] );
 	}
 
+	public function test_resolve_treats_a_declared_own_address_as_this_server(): void {
+		\WP_SAM\Intelligence\Own_Address_Store::save( '185.199.223.7' );
+		$resolver = $this->resolver_with_vendors( array() );
+
+		$this->assertSame( 'loopback', $resolver->resolve( '185.199.223.7', 'WordPress/7.1.3; https://example.com' )['verification_state'] );
+		$this->assertSame( 'unknown', $resolver->resolve( '185.199.223.8', 'WordPress/7.1.3; https://example.com' )['verification_state'] );
+	}
 }
