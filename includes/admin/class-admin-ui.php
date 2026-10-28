@@ -5,8 +5,8 @@
  * Registers a top-level "Security Automation Manager" menu. Per
  * .roadmap/phase3_early_plan.md §6.1, the visible left-nav leads with five
  * entries matching the product's operational lifecycle:
- *   - security-automation-manager          – Settings (§6.2 -- was "Overview"): per-pillar status
- *      summary, plus Readiness, Recovery, Updates, and About tabs. Registered FIRST (not last,
+ *   - security-automation-manager          – Settings (§6.2 -- was "Overview"): home summary
+ *      (Overview tab), per-pillar status (All tab), plus Readiness, Recovery, Updates, and About tabs. Registered FIRST (not last,
  *      despite the roadmap listing it last in prose) -- WordPress's own add_submenu_page() auto-
  *      inserts an extra "link back to parent" item, labelled with the top-level menu's own
  *      title, the first time a DIFFERENT slug is registered while $submenu[parent] is still
@@ -109,6 +109,7 @@ use WP_SAM\Security\Cross_Origin_Embedder_Policy_Builder;
 use WP_SAM\Security\Cross_Origin_Opener_Policy_Builder;
 use WP_SAM\Security\Cross_Origin_Resource_Policy_Builder;
 use WP_SAM\Security\Dependency_Governance_Builder;
+use WP_SAM\Security\Dependency_Sri_Fetcher;
 use WP_SAM\Security\Information_Masking_Builder;
 use WP_SAM\Security\Information_Masking_Diagnostic;
 use WP_SAM\Security\Internal_Script_Integrity_Builder;
@@ -235,6 +236,7 @@ class Admin_UI {
 		add_action( 'wp_ajax_wp_sam_set_dependency_mode', array( $this, 'ajax_set_dependency_mode' ) );
 		add_action( 'wp_ajax_wp_sam_classify_dependency', array( $this, 'ajax_classify_dependency' ) );
 		add_action( 'wp_ajax_wp_sam_suggest_dependency_sri', array( $this, 'ajax_suggest_dependency_sri' ) );
+		add_action( 'wp_ajax_wp_sam_reapprove_dependency_sri', array( $this, 'ajax_reapprove_dependency_sri' ) );
 	}
 
 	// ── Menu registration ─────────────────────────────────────────────────────
@@ -3326,6 +3328,12 @@ class Admin_UI {
 	 * endpoint automatically as soon as ajax_suggest_dependency_sri()
 	 * returns a hash (see admin.js) -- there is no separate confirmation
 	 * step between "fetch and hash" and "save as the pinned value."
+	 *
+	 * Also records pinned_url (schema v48), the exact URL whose content the
+	 * hash was taken from, which Pinned_Dependency_Checker re-fetches daily:
+	 * the URL Suggest hashed (posted as pinned_url, same-origin checked), or
+	 * on a manual pin the row's last_seen_url at that moment. A new hash, or
+	 * leaving immutable_pinned, clears any recorded drift.
 	 */
 	public function ajax_classify_dependency(): void {
 		check_ajax_referer( 'wp_sam_admin_nonce', 'nonce' );
@@ -3336,6 +3344,7 @@ class Admin_UI {
 		$id             = (int) ( $_POST['id'] ?? 0 );
 		$classification = sanitize_text_field( wp_unslash( $_POST['classification'] ?? '' ) );
 		$expected_sri   = sanitize_text_field( wp_unslash( $_POST['expected_sri'] ?? '' ) );
+		$posted_pin_url = esc_url_raw( trim( (string) wp_unslash( $_POST['pinned_url'] ?? '' ) ) );
 
 		if ( $id <= 0 ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid entry.', 'vcns-security-automation-manager' ) ) );
@@ -3347,7 +3356,7 @@ class Admin_UI {
 
 		$sanitized_sri = null;
 		if ( 'immutable_pinned' === $classification && '' !== trim( $expected_sri ) ) {
-			if ( ! preg_match( '/^sha(256|384|512)-[A-Za-z0-9+\/]+=*$/', trim( $expected_sri ) ) ) {
+			if ( null === Dependency_Sri_Fetcher::algorithm_of( $expected_sri ) ) {
 				wp_send_json_error( array( 'message' => __( 'Expected SRI hash must look like sha256-…, sha384-… or sha512-… (base64).', 'vcns-security-automation-manager' ) ) );
 			}
 			$sanitized_sri = trim( $expected_sri );
@@ -3355,15 +3364,50 @@ class Admin_UI {
 
 		global $wpdb;
 		$table = $wpdb->prefix . 'sam_dependency_inventory';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$row = $wpdb->get_row( $wpdb->prepare( "SELECT origin, expected_sri, last_seen_url, pinned_url FROM {$table} WHERE id = %d", $id ), ARRAY_A );
+		if ( empty( $row ) ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid entry.', 'vcns-security-automation-manager' ) ) );
+		}
+
+		$origin      = (string) $row['origin'];
+		$sri_changed = trim( (string) ( $row['expected_sri'] ?? '' ) ) !== (string) $sanitized_sri;
+		$pinned_url  = null;
+		if ( null !== $sanitized_sri ) {
+			if ( '' !== $posted_pin_url ) {
+				if ( ! Dependency_Sri_Fetcher::is_allowed_url( $posted_pin_url, $origin ) ) {
+					wp_send_json_error( array( 'message' => __( 'That URL must be an https:// URL on the same origin already shown for this row.', 'vcns-security-automation-manager' ) ) );
+				}
+				$pinned_url = $posted_pin_url;
+			} elseif ( $sri_changed || '' === trim( (string) ( $row['pinned_url'] ?? '' ) ) ) {
+				$last_seen  = trim( (string) ( $row['last_seen_url'] ?? '' ) );
+				$pinned_url = Dependency_Sri_Fetcher::is_allowed_url( $last_seen, $origin ) ? $last_seen : null;
+			} else {
+				$pinned_url = (string) $row['pinned_url'];
+			}
+		}
+
+		$data = array(
+			'classification' => $classification,
+			'expected_sri'   => $sanitized_sri,
+			'pinned_url'     => $pinned_url,
+			'updated_at'     => current_time( 'mysql', true ),
+		);
+		if ( null === $sanitized_sri || $sri_changed ) {
+			// A different hash (or no longer pinned) makes any recorded
+			// drift and check result stale.
+			$data['drift_detected_at']      = null;
+			$data['drift_observed_sri']     = null;
+			$data['integrity_checked_at']   = null;
+			$data['integrity_attempted_at'] = null;
+			$data['integrity_check_error']  = null;
+		}
+
 		$wpdb->update(
 			$table,
-			array(
-				'classification' => $classification,
-				'expected_sri'   => $sanitized_sri,
-				'updated_at'     => current_time( 'mysql', true ),
-			),
+			$data,
 			array( 'id' => $id ),
-			array( '%s', '%s', '%s' ),
+			array_fill( 0, count( $data ), '%s' ),
 			array( '%d' )
 		);
 
@@ -3376,19 +3420,15 @@ class Admin_UI {
 	 * This method itself only ever returns the computed hash to the browser
 	 * and writes nothing -- but the admin UI's "Suggest" button (admin.js)
 	 * immediately posts that returned hash on to ajax_classify_dependency()
-	 * and saves it as the pinned "Expected SRI" value, with no separate
-	 * confirmation click in between. The trust boundary here is "you typed
-	 * or accepted this exact URL," not "you separately reviewed the
-	 * resulting hash before it took effect."
+	 * (with the URL, as pinned_url) and saves it as the pinned "Expected
+	 * SRI" value, with no separate confirmation click in between. The trust
+	 * boundary here is "you typed or accepted this exact URL," not "you
+	 * separately reviewed the resulting hash before it took effect."
 	 *
 	 * Deliberately restricted to a URL whose origin already matches an
 	 * origin this plugin has itself observed on a real page load (the
-	 * inventory row identified by $id): this endpoint fetches whatever URL
-	 * it's given, so without that restriction it would be a same-origin-only
-	 * fetch proxy an authenticated admin could point at anything. Requiring
-	 * the origin to match a known, passively-discovered one keeps its blast
-	 * radius to "third-party assets this site already loads" rather than
-	 * arbitrary internal/external URLs.
+	 * inventory row identified by $id) -- see Dependency_Sri_Fetcher, which
+	 * holds that guard for both this and the daily drift check.
 	 */
 	public function ajax_suggest_dependency_sri(): void {
 		check_ajax_referer( 'wp_sam_admin_nonce', 'nonce' );
@@ -3415,35 +3455,96 @@ class Admin_UI {
 			wp_send_json_error( array( 'message' => __( 'Invalid entry.', 'vcns-security-automation-manager' ) ) );
 		}
 
-		$url_origin = Dependency_Governance_Builder::normalize_origin( $url );
-		if ( null === $url_origin || $url_origin !== $row['origin'] ) {
-			wp_send_json_error( array( 'message' => __( 'That URL must be on the same origin already shown for this row.', 'vcns-security-automation-manager' ) ) );
+		$result = Dependency_Sri_Fetcher::fetch_and_hash( $url, (string) $row['origin'] );
+		if ( empty( $result['ok'] ) ) {
+			$messages = array(
+				Dependency_Sri_Fetcher::ERROR_ORIGIN_MISMATCH => __( 'That URL must be on the same origin already shown for this row.', 'vcns-security-automation-manager' ),
+				Dependency_Sri_Fetcher::ERROR_FETCH_FAILED => __( 'Could not fetch that URL.', 'vcns-security-automation-manager' ),
+				Dependency_Sri_Fetcher::ERROR_HTTP_STATUS  => __( 'That URL did not return a successful response.', 'vcns-security-automation-manager' ),
+				Dependency_Sri_Fetcher::ERROR_EMPTY_OR_LARGE => __( 'That URL returned an empty or unexpectedly large response.', 'vcns-security-automation-manager' ),
+			);
+			$error    = (string) ( $result['error'] ?? '' );
+			wp_send_json_error( array( 'message' => $messages[ $error ] ?? __( 'Only https:// URLs can be hashed.', 'vcns-security-automation-manager' ) ) );
 		}
 
-		$response = wp_remote_get(
-			$url,
+		wp_send_json_success(
 			array(
-				'timeout'   => 10,
-				'sslverify' => true,
+				'hash' => $result['hash'],
+				'url'  => $url,
 			)
 		);
-		if ( is_wp_error( $response ) ) {
-			wp_send_json_error( array( 'message' => __( 'Could not fetch that URL.', 'vcns-security-automation-manager' ) ) );
-		}
-		if ( 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
-			wp_send_json_error( array( 'message' => __( 'That URL did not return a successful response.', 'vcns-security-automation-manager' ) ) );
+	}
+
+	/**
+	 * "Re-approve new hash" for a pinned dependency whose file changed at
+	 * its source (Pinned_Dependency_Checker recorded drift_observed_sri).
+	 * An explicit administrator decision: copies drift_observed_sri into
+	 * expected_sri, keeps pinned_url, clears the drift fields, and records
+	 * the old and new hash in the audit log.
+	 *
+	 * This only changes what SAM compares against. The integrity attribute
+	 * in the theme/plugin markup that loads the file is not SAM's to change
+	 * (SAM never injects one), so the response returns the new hash for the
+	 * page to show with a copy button, and the browser keeps blocking the
+	 * file until that attribute is updated too.
+	 */
+	public function ajax_reapprove_dependency_sri(): void {
+		check_ajax_referer( 'wp_sam_admin_nonce', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( null, 403 );
 		}
 
-		$body = wp_remote_retrieve_body( $response );
-		// 5 MB is generously above any legitimate third-party script/stylesheet;
-		// guards against hashing an unexpectedly huge response.
-		if ( '' === $body || strlen( $body ) > 5 * MB_IN_BYTES ) {
-			wp_send_json_error( array( 'message' => __( 'That URL returned an empty or unexpectedly large response.', 'vcns-security-automation-manager' ) ) );
+		$id = (int) ( $_POST['id'] ?? 0 );
+		if ( $id <= 0 ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid entry.', 'vcns-security-automation-manager' ) ) );
 		}
 
-		$hash = 'sha384-' . base64_encode( hash( 'sha384', $body, true ) );
+		global $wpdb;
+		$table = $wpdb->prefix . 'sam_dependency_inventory';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$row = $wpdb->get_row( $wpdb->prepare( "SELECT surface, resource_type, origin, classification, expected_sri, pinned_url, drift_observed_sri FROM {$table} WHERE id = %d", $id ), ARRAY_A );
+		if ( empty( $row ) ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid entry.', 'vcns-security-automation-manager' ) ) );
+		}
 
-		wp_send_json_success( array( 'hash' => $hash ) );
+		$observed = trim( (string) ( $row['drift_observed_sri'] ?? '' ) );
+		if ( 'immutable_pinned' !== $row['classification'] || null === Dependency_Sri_Fetcher::algorithm_of( $observed ) ) {
+			wp_send_json_error( array( 'message' => __( 'There is no changed hash to re-approve for this entry.', 'vcns-security-automation-manager' ) ) );
+		}
+
+		$now = current_time( 'mysql', true );
+		$wpdb->update(
+			$table,
+			array(
+				'expected_sri'           => $observed,
+				'drift_detected_at'      => null,
+				'drift_observed_sri'     => null,
+				'integrity_checked_at'   => $now,
+				'integrity_attempted_at' => $now,
+				'integrity_check_error'  => null,
+				'updated_at'             => $now,
+			),
+			array( 'id' => $id ),
+			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s' ),
+			array( '%d' )
+		);
+
+		$url = trim( (string) ( $row['pinned_url'] ?? '' ) );
+		$this->plugin->audit->log(
+			'dependency_integrity_monitor',
+			'pinned_hash_reapproved',
+			sprintf(
+				'Re-approved the changed %1$s at %2$s (%3$s surface): pinned hash %4$s replaced by %5$s. The integrity attribute in the markup that loads it must be updated to the new value too.',
+				(string) $row['resource_type'],
+				'' !== $url ? $url : (string) $row['origin'],
+				(string) $row['surface'],
+				trim( (string) ( $row['expected_sri'] ?? '' ) ),
+				$observed
+			),
+			'info'
+		);
+
+		wp_send_json_success( array( 'hash' => $observed ) );
 	}
 
 	// ── Promotion gate ────────────────────────────────────────────────────────

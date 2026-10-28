@@ -24,6 +24,7 @@ use WP_SAM\Intelligence\Ads_Txt_Store;
 use WP_SAM\Intelligence\Agents_Rules_Store;
 use WP_SAM\Intelligence\App_Ads_Txt_Store;
 use WP_SAM\Intelligence\Asn_Lookup_Store;
+use WP_SAM\Intelligence\Country_Groups;
 use WP_SAM\Intelligence\Custom_Rule_Store;
 use WP_SAM\Intelligence\Detector_Policy_Store;
 use WP_SAM\Intelligence\Detector_Registry;
@@ -598,8 +599,85 @@ $tab_help = array(
 					</p>
 				</div>
 				<?php endif; ?>
-				<div class="wp-sam-country-grid">
-					<?php foreach ( Iso_Countries::all() as $code => $name ) : ?>
+				<?php
+				// Selection aid only: the group <select> has no name, so it is
+				// never posted -- assets/js/admin.js just ticks/unticks the
+				// grid's own checkboxes, and blocked_countries[] stays the only
+				// thing handle_geoip_country_block_save() ever sees.
+				$geoip_country_names    = Iso_Countries::all();
+				$geoip_ticked_count     = count( array_intersect( array_keys( $geoip_country_names ), $geoip_checked_codes ) );
+				$geoip_group_categories = Country_Groups::by_category();
+				?>
+				<div class="wp-sam-country-groups" id="wp-sam-country-groups">
+					<h4 style="margin:0 0 .5em"><?php esc_html_e( 'Select by group', 'vcns-security-automation-manager' ); ?></h4>
+					<p class="description" style="margin-top:0">
+						<?php esc_html_e( 'A shortcut for ticking many countries at once. Choosing a group only ticks or unticks its countries in the list below -- every country stays individually editable, and nothing is blocked until you click Save. Group lists are bundled with SAM as a snapshot (each shows its source and as-of date) and are never updated automatically.', 'vcns-security-automation-manager' ); ?>
+					</p>
+					<label for="wp-sam-country-group-select"><?php esc_html_e( 'Group', 'vcns-security-automation-manager' ); ?></label>
+					<select id="wp-sam-country-group-select" aria-describedby="wp-sam-country-group-details">
+						<option value=""><?php esc_html_e( '— Choose a group —', 'vcns-security-automation-manager' ); ?></option>
+						<?php foreach ( $geoip_group_categories as $geoip_category ) : ?>
+						<optgroup label="<?php echo esc_attr( $geoip_category['label'] ); ?>">
+							<?php foreach ( $geoip_category['groups'] as $geoip_group_key => $geoip_group ) : ?>
+							<option value="<?php echo esc_attr( $geoip_group_key ); ?>" data-codes="<?php echo esc_attr( implode( ' ', $geoip_group['codes'] ) ); ?>">
+								<?php
+								/* translators: 1: group name, e.g. "Northern Europe"; 2: number of countries in it. */
+								echo esc_html( sprintf( __( '%1$s (%2$d)', 'vcns-security-automation-manager' ), $geoip_group['label'], count( $geoip_group['codes'] ) ) );
+								?>
+							</option>
+							<?php endforeach; ?>
+						</optgroup>
+						<?php endforeach; ?>
+					</select>
+					<button type="button" class="button" data-wp-sam-country-group-action="tick" disabled><?php esc_html_e( 'Tick all in group', 'vcns-security-automation-manager' ); ?></button>
+					<button type="button" class="button" data-wp-sam-country-group-action="untick" disabled><?php esc_html_e( 'Untick all in group', 'vcns-security-automation-manager' ); ?></button>
+
+					<div id="wp-sam-country-group-details" class="wp-sam-country-group-details" aria-live="polite">
+						<?php foreach ( $geoip_group_categories as $geoip_category_key => $geoip_category ) : ?>
+							<?php foreach ( $geoip_category['groups'] as $geoip_group_key => $geoip_group ) : ?>
+						<div data-wp-sam-country-group-details="<?php echo esc_attr( $geoip_group_key ); ?>" hidden>
+							<p>
+								<strong><?php echo esc_html( $geoip_group['label'] ); ?></strong>
+								&middot;
+								<?php
+								/* translators: %s: date the group list was last checked, YYYY-MM-DD. */
+								echo esc_html( sprintf( __( 'As of %s', 'vcns-security-automation-manager' ), $geoip_group['as_of'] ) );
+								?>
+								&middot;
+								<?php esc_html_e( 'Source:', 'vcns-security-automation-manager' ); ?>
+								<a href="<?php echo esc_url( $geoip_group['source_url'] ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( $geoip_group['source'] ); ?></a>
+							</p>
+								<?php if ( '' !== $geoip_group['note'] ) : ?>
+							<p><?php echo esc_html( $geoip_group['note'] ); ?></p>
+							<?php endif; ?>
+								<?php if ( 'sanctions' === $geoip_category_key ) : ?>
+							<p><em><?php esc_html_e( 'This is a snapshot taken on the as-of date and SAM does not update it automatically -- check the source for the current list. Sanctions regimes target named persons, entities and sectors; being on this list is not in itself a requirement to block all traffic from a country. Whether to block is your decision.', 'vcns-security-automation-manager' ); ?></em></p>
+							<?php endif; ?>
+							<p>
+								<?php
+								echo esc_html(
+									implode(
+										', ',
+										array_map(
+											static fn( $geoip_code ) => ( $geoip_country_names[ $geoip_code ] ?? $geoip_code ) . ' (' . $geoip_code . ')',
+											$geoip_group['codes']
+										)
+									)
+								);
+								?>
+							</p>
+						</div>
+							<?php endforeach; ?>
+						<?php endforeach; ?>
+					</div>
+
+					<p class="wp-sam-country-count">
+						<?php esc_html_e( 'Countries ticked:', 'vcns-security-automation-manager' ); ?>
+						<strong id="wp-sam-country-count" aria-live="polite"><?php echo esc_html( (string) $geoip_ticked_count ); ?></strong>
+					</p>
+				</div>
+				<div class="wp-sam-country-grid" id="wp-sam-country-grid">
+					<?php foreach ( $geoip_country_names as $code => $name ) : ?>
 					<label>
 						<input type="checkbox" name="blocked_countries[]" value="<?php echo esc_attr( $code ); ?>" <?php checked( in_array( $code, $geoip_checked_codes, true ) ); ?> />
 						<?php echo esc_html( $name ); ?> <code><?php echo esc_html( $code ); ?></code>

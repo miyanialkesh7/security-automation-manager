@@ -53,7 +53,10 @@ class DataResetterTest extends TestCase {
 			'wp_sam_conflict_probe_ran'  => 1,
 			'unrelated_plugin_transient' => 1,
 		);
-		$GLOBALS['_wp_cron']            = array( 'wp_sam_daily_scan' => time() + 3600 );
+		$GLOBALS['_wp_cron']            = array(
+			'wp_sam_daily_scan'            => time() + 3600,
+			'wp_sam_dependency_hash_check' => time() + 3600,
+		);
 
 		$result = ( new Data_Resetter() )->reset();
 
@@ -66,6 +69,7 @@ class DataResetterTest extends TestCase {
 		$this->assertArrayNotHasKey( 'wp_sam_conflict_probe_ran', $GLOBALS['_wp_transients'] );
 		$this->assertArrayHasKey( 'unrelated_plugin_transient', $GLOBALS['_wp_transients'] );
 		$this->assertArrayHasKey( 'wp_sam_daily_scan', $GLOBALS['_wp_cron'] );
+		$this->assertArrayNotHasKey( 'wp_sam_dependency_hash_check', $GLOBALS['_wp_cron'] );
 		$this->assertSame( WP_SAM_DB_VERSION, $GLOBALS['_wp_options']['wp_sam_db_version'] );
 		$this->assertCount( 4, $GLOBALS['_wpdb_updated_rows'] );
 		$this->assertSame(

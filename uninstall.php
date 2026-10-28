@@ -91,3 +91,4 @@ delete_transient( 'wp_sam_conflict_probe_ran' );
 wp_clear_scheduled_hook( 'wp_sam_daily_scan' );
 wp_clear_scheduled_hook( 'wp_sam_cert_issue' );
 wp_clear_scheduled_hook( 'wp_sam_cert_renewal_check' );
+wp_clear_scheduled_hook( 'wp_sam_dependency_hash_check' );

@@ -114,10 +114,10 @@ final class Recommendation_Rule_Csp_Enforce_Ready implements Recommendation_Rule
 	/**
 	 * True when the policy has been sent without a gap longer than
 	 * Csp_Delivery_Log::MAX_GAP_SECONDS since before the quiet window began,
-	 * was last sent within that gap, and hasn't had hashes trimmed during
-	 * the window.
+	 * was last sent within that gap, and hasn't had hashes trimmed or
+	 * reports throttled during the window.
 	 *
-	 * @param array{first_sent?: int, last_sent?: int, last_trimmed?: int} $delivery
+	 * @param array{first_sent?: int, last_sent?: int, last_trimmed?: int, last_throttled?: int} $delivery
 	 */
 	private static function was_delivered_throughout( array $delivery ): bool {
 		$now    = time();
@@ -133,6 +133,11 @@ final class Recommendation_Rule_Csp_Enforce_Ready implements Recommendation_Rule
 			return false;
 		}
 		if ( ! empty( $delivery['last_trimmed'] ) && $now - (int) $delivery['last_trimmed'] < $window ) {
+			return false;
+		}
+		// Reports the endpoint throttled were never stored, so a quiet
+		// count during that window proves nothing.
+		if ( ! empty( $delivery['last_throttled'] ) && $now - (int) $delivery['last_throttled'] < $window ) {
 			return false;
 		}
 

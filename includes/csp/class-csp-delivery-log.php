@@ -38,6 +38,9 @@ final class Csp_Delivery_Log {
 
 	private const WRITE_INTERVAL_SECONDS = HOUR_IN_SECONDS;
 
+	/** Finer than the hourly fields, so "last throttled" stays meaningful. */
+	private const THROTTLE_WRITE_INTERVAL_SECONDS = 5 * MINUTE_IN_SECONDS;
+
 	public static function record_sent( string $surface, ?int $now = null ): void {
 		$now   = $now ?? time();
 		$entry = self::get( $surface );
@@ -69,7 +72,30 @@ final class Csp_Delivery_Log {
 		update_option( self::OPTION_PREFIX . $surface, $entry, true );
 	}
 
-	/** @return array{first_sent?: int, last_sent?: int, last_trimmed?: int} */
+	/**
+	 * Violation_Reporter::check_not_flooding() answered a report for this
+	 * surface with a 429, so some of its violations were never stored.
+	 * Recorded so that loss is visible (the Violations tab's per-surface
+	 * strip, the Readiness tab) and so a surface whose reports were being
+	 * dropped is never read as having run quietly. Throttled to one write
+	 * per interval like the other fields: during a real storm this is
+	 * called once per throttled IP per window.
+	 */
+	public static function record_throttled( string $surface, ?int $now = null ): void {
+		$now   = $now ?? time();
+		$entry = self::get( $surface );
+
+		$last_throttled = isset( $entry['last_throttled'] ) ? (int) $entry['last_throttled'] : 0;
+		if ( $last_throttled > 0 && $now - $last_throttled < self::THROTTLE_WRITE_INTERVAL_SECONDS ) {
+			return;
+		}
+
+		$entry['last_throttled'] = $now;
+
+		update_option( self::OPTION_PREFIX . $surface, $entry, true );
+	}
+
+	/** @return array{first_sent?: int, last_sent?: int, last_trimmed?: int, last_throttled?: int} */
 	public static function get( string $surface ): array {
 		$entry = get_option( self::OPTION_PREFIX . $surface, array() );
 		return is_array( $entry ) ? $entry : array();

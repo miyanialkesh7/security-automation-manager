@@ -3,7 +3,7 @@
  * Plugin Name:       VCNS Security Automation Manager
  * Plugin URI:        https://github.com/vcns/security-automation-manager
  * Description:       Self-learning security headers, built-in attack detection and rate limiting, file-integrity monitoring, and free TLS certificates. No paywall.
- * Version:           2.11.6
+ * Version:           2.12.0
  * Requires at least: 6.4
  * Requires PHP:      8.1
  * Author:            VCNS Tech Ltd
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // ── Core constants ────────────────────────────────────────────────────────────
-define( 'WP_SAM_VERSION', '2.11.6' );
+define( 'WP_SAM_VERSION', '2.12.0' );
 
 /**
  * Schema version. Increment whenever a database schema change is made.
@@ -334,8 +334,15 @@ define( 'WP_SAM_VERSION', '2.11.6' );
  *        verify-wporg-package.sh's whole purpose. Only ever mattered on a
  *        private/commercial build -- neither public release channel has
  *        ever shipped a working checkout path.
+ *   v48: adds pinned_url, integrity_checked_at, integrity_attempted_at,
+ *        integrity_check_error, drift_detected_at and drift_observed_sri
+ *        to sam_dependency_inventory, for Security\Pinned_Dependency_
+ *        Checker's daily re-fetch of each pinned third-party file. A
+ *        changed file is recorded as drift for an administrator to
+ *        re-approve or reclassify; a fetch failure is recorded separately
+ *        and never as drift. Nothing is approved automatically.
  */
-define( 'WP_SAM_DB_VERSION', '47' );
+define( 'WP_SAM_DB_VERSION', '48' );
 
 define( 'WP_SAM_FILE', __FILE__ );
 define( 'WP_SAM_DIR', plugin_dir_path( __FILE__ ) );
