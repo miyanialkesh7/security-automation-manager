@@ -17,7 +17,9 @@
  *   detection -- this plugin must never be the reason a site owner is
  *   locked out of their own site. An explicit admin-entered IP block rule
  *   still applies even to a privileged session; only automatic
- *   rate-limit/brute-force escalation is exempted.
+ *   rate-limit/brute-force escalation is exempted. Such a request is not
+ *   counted towards its address's rate limit either, and never records a
+ *   violation (Request_Observer applies the same rule to detector matches).
  * - Escalation through Traffic_Block_Store's progressive stages is
  *   automatic only up to 'extended_block'; 'persistent_block' requires an
  *   explicit administrator action (Traffic_Block_Store::set_persistent()).
@@ -278,6 +280,16 @@ final class Traffic_Guard {
 			);
 		}
 
+		// Checked before the rate limiter, not after it. The counter is per
+		// address, so an administrator's own page loads used to count
+		// towards it, and the next request from that address without an
+		// admin session -- a colleague in the same office, or the
+		// administrator after logging out -- was the one that "exceeded" the
+		// limit, climbed the ladder and could be blocked at the login page.
+		if ( $is_privileged_user ) {
+			return $allow;
+		}
+
 		$policy = $this->policies->get( $surface );
 		if ( null === $policy ) {
 			return $allow;
@@ -291,10 +303,6 @@ final class Traffic_Guard {
 		);
 
 		if ( ! $exceeded ) {
-			return $allow;
-		}
-
-		if ( $is_privileged_user ) {
 			return $allow;
 		}
 

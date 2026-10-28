@@ -22,6 +22,7 @@ class TrafficBlockStoreTest extends TestCase {
 	}
 
 	private function row( array $overrides = array() ): array {
+		$now = gmdate( 'Y-m-d H:i:s' );
 		return array_merge(
 			array(
 				'id'               => 1,
@@ -33,8 +34,8 @@ class TrafficBlockStoreTest extends TestCase {
 				'blocked_until'    => null,
 				'is_persistent'    => 0,
 				'fingerprint'      => 'x',
-				'first_seen_at'    => '2026-09-02 00:00:00',
-				'last_seen_at'     => '2026-09-02 00:00:00',
+				'first_seen_at'    => $now,
+				'last_seen_at'     => $now,
 			),
 			$overrides
 		);
@@ -159,4 +160,57 @@ class TrafficBlockStoreTest extends TestCase {
 		$this->assertSame( array(), $GLOBALS['_wpdb_updated_rows'] );
 	}
 
+	// ── Stage decay ─────────────────────────────────────────────────────────
+
+	private static function ago( int $seconds ): string {
+		return gmdate( 'Y-m-d H:i:s', time() - $seconds );
+	}
+
+	public function test_effective_stage_is_observe_for_no_row(): void {
+		$this->assertSame( 'observe', Traffic_Block_Store::effective_stage( null ) );
+	}
+
+	public function test_effective_stage_is_unchanged_within_the_first_quiet_hour(): void {
+		$row = $this->row( array( 'stage' => 'throttle', 'last_seen_at' => self::ago( 3599 ) ) );
+
+		$this->assertSame( 'throttle', Traffic_Block_Store::effective_stage( $row ) );
+	}
+
+	public function test_effective_stage_steps_down_one_stage_per_quiet_hour(): void {
+		$row = $this->row( array( 'stage' => 'extended_block', 'last_seen_at' => self::ago( 3 * 3600 ), 'blocked_until' => self::ago( 2 * 3600 ) ) );
+
+		// Quiet since the block ended two hours ago, not since the violation three hours ago.
+		$this->assertSame( 'throttle', Traffic_Block_Store::effective_stage( $row ) );
+	}
+
+	public function test_effective_stage_never_drops_below_observe(): void {
+		$row = $this->row( array( 'stage' => 'extended_block', 'last_seen_at' => self::ago( 30 * 86400 ) ) );
+
+		$this->assertSame( 'observe', Traffic_Block_Store::effective_stage( $row ) );
+	}
+
+	public function test_effective_stage_does_not_decay_while_a_block_is_still_running(): void {
+		$row = $this->row( array( 'stage' => 'extended_block', 'last_seen_at' => self::ago( 600 ), 'blocked_until' => gmdate( 'Y-m-d H:i:s', time() + 3000 ) ) );
+
+		$this->assertSame( 'extended_block', Traffic_Block_Store::effective_stage( $row ) );
+	}
+
+	public function test_effective_stage_never_decays_a_persistent_block(): void {
+		$row = $this->row( array( 'stage' => 'persistent_block', 'is_persistent' => 1, 'last_seen_at' => self::ago( 30 * 86400 ) ) );
+
+		$this->assertSame( 'persistent_block', Traffic_Block_Store::effective_stage( $row ) );
+	}
+
+	public function test_record_violation_after_a_long_quiet_spell_restarts_low_on_the_ladder(): void {
+		$GLOBALS['_wpdb_get_row_queue'] = array(
+			$this->row( array( 'stage' => 'extended_block', 'last_seen_at' => self::ago( 5 * 86400 ), 'blocked_until' => self::ago( 5 * 86400 - 3600 ) ) ),
+			$this->row( array( 'stage' => 'warn' ) ),
+		);
+
+		$this->store->record_violation( '203.0.113.42', 'frontend', 'rate_limit' );
+
+		$updated = $GLOBALS['_wpdb_updated_rows'][0]['data'];
+		$this->assertSame( 'warn', $updated['stage'] );
+		$this->assertNull( $updated['blocked_until'] );
+	}
 }

@@ -370,6 +370,17 @@ class RequestObserverTest extends TestCase {
 		$this->assertSame( 'detector:fixture-enforce-family', $writes[0]['data']['reason'] );
 	}
 
+	public function test_observe_records_the_event_but_never_escalates_a_logged_in_administrators_address(): void {
+		Detector_Registry::register( new Observer_Enforce_Fixture_Detector() );
+		$GLOBALS['_wp_is_user_logged_in']                  = true;
+		$GLOBALS['_wp_current_user_can']['manage_options'] = true;
+
+		$this->observer->observe();
+
+		$this->assertSame( array(), $this->block_writes() );
+		$this->assertNotEmpty( $this->event_queries() );
+	}
+
 	public function test_observe_never_records_a_traffic_block_violation_for_an_observe_only_finding(): void {
 		Detector_Registry::register( new Observer_Fixture_Detector() );
 
