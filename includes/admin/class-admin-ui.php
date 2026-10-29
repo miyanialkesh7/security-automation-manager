@@ -5,8 +5,8 @@
  * Registers a top-level "Security Automation Manager" menu. Per
  * .roadmap/phase3_early_plan.md §6.1, the visible left-nav leads with five
  * entries matching the product's operational lifecycle:
- *   - security-automation-manager          – Settings (§6.2 -- was "Overview"): per-pillar status
- *      summary, plus Readiness, Recovery, Updates, and About tabs. Registered FIRST (not last,
+ *   - security-automation-manager          – Settings (§6.2 -- was "Overview"): home summary
+ *      (Overview tab), per-pillar status (All tab), plus Readiness, Recovery, Updates, and About tabs. Registered FIRST (not last,
  *      despite the roadmap listing it last in prose) -- WordPress's own add_submenu_page() auto-
  *      inserts an extra "link back to parent" item, labelled with the top-level menu's own
  *      title, the first time a DIFFERENT slug is registered while $submenu[parent] is still
@@ -65,6 +65,7 @@ use WP_SAM\Rollback_Guard;
 use WP_SAM\CSP\Automation_Config;
 use WP_SAM\CSP\Automation_Mode_Registry;
 use WP_SAM\CSP\Conflict_Detector;
+use WP_SAM\CSP\Csp_Surfaces;
 use WP_SAM\CSP\Policy_Builder;
 use WP_SAM\CSP\Policy_Change_Manager;
 use WP_SAM\CSP\Policy_Version_Manager;
@@ -93,9 +94,11 @@ use WP_SAM\Intelligence\Ip_Resolver;
 use WP_SAM\Intelligence\Ip_Rule_Store;
 use WP_SAM\Intelligence\Iso_Countries;
 use WP_SAM\Intelligence\Network_Rule_Store;
+use WP_SAM\Intelligence\Own_Address_Store;
 use WP_SAM\Intelligence\Recommendation_Dismissal_Store;
 use WP_SAM\Intelligence\Robots_Rules_Store;
 use WP_SAM\Intelligence\Security_Txt_Store;
+use WP_SAM\Intelligence\Site_Country;
 use WP_SAM\Intelligence\Tor_Exit_List_Store;
 use WP_SAM\Intelligence\Scanner_Identity_Store;
 use WP_SAM\Intelligence\Scanner_Vendor_Store;
@@ -107,6 +110,7 @@ use WP_SAM\Security\Cross_Origin_Embedder_Policy_Builder;
 use WP_SAM\Security\Cross_Origin_Opener_Policy_Builder;
 use WP_SAM\Security\Cross_Origin_Resource_Policy_Builder;
 use WP_SAM\Security\Dependency_Governance_Builder;
+use WP_SAM\Security\Dependency_Sri_Fetcher;
 use WP_SAM\Security\Information_Masking_Builder;
 use WP_SAM\Security\Information_Masking_Diagnostic;
 use WP_SAM\Security\Internal_Script_Integrity_Builder;
@@ -140,6 +144,9 @@ class Admin_UI {
 		'hash_manager/hash_learning_rate_limited' => 'Content Security Policy setup paused itself for part of your site for the rest of this hour, as a safety measure against a technical issue. This does not affect how your site works for visitors. If you keep seeing this message, ask a developer to look into it.',
 		'policy_builder/hash_budget_exceeded'     => 'Content Security Policy automatically trimmed some older, unused approvals to keep your site running safely. No action is needed unless this keeps happening.',
 		'policy_builder/policy_too_large'         => 'Content Security Policy protection was skipped for one page load, as a safety measure to stop the page failing to load. This does not affect how your site works for visitors. If you keep seeing this message, ask a developer to look into it.',
+		// Never name where a redirect pointed: see Same_Host_Fetcher.
+		'discovery/crawl_redirected_offsite'      => 'This site\'s own request to one of its pages was sent away from this site before WordPress saw it, so Content Security Policy discovery could not scan that page. Something outside this plugin is doing this, usually an IP allow-list in .htaccess or the web server\'s configuration, and the plugin cannot override it. To let these requests in, allow the one address this server uses to reach itself: your server\'s access log shows them with the user agent WP-CSP-Discovery. Allow that single address rather than a whole private range, which other servers on your host\'s network may share.',
+		'dependency_integrity_monitor/scan_redirected_offsite' => 'This site\'s own request to its home page was sent away from this site before WordPress saw it, so pinned third-party script hashes could not be checked. Something outside this plugin is doing this, usually an IP allow-list in .htaccess or the web server\'s configuration, and the plugin cannot override it. To let these requests in, allow the one address this server uses to reach itself: your server\'s access log shows this plugin\'s requests with the user agent WP-CSP-Discovery, from the same address. Allow that single address rather than a whole private range, which other servers on your host\'s network may share.',
 	);
 
 	private Plugin $plugin;
@@ -172,6 +179,7 @@ class Admin_UI {
 		add_action( 'admin_post_wp_sam_scanner_vendor_delete', array( $this, 'handle_scanner_vendor_delete' ) );
 		add_action( 'admin_post_wp_sam_traffic_policy_update', array( $this, 'handle_traffic_policy_update' ) );
 		add_action( 'admin_post_wp_sam_ip_rule_add', array( $this, 'handle_ip_rule_add' ) );
+		add_action( 'admin_post_wp_sam_own_addresses_save', array( $this, 'handle_own_addresses_save' ) );
 		add_action( 'admin_post_wp_sam_ip_rule_delete', array( $this, 'handle_ip_rule_delete' ) );
 		add_action( 'admin_post_wp_sam_traffic_block_release', array( $this, 'handle_traffic_block_release' ) );
 		add_action( 'admin_post_wp_sam_traffic_block_persist', array( $this, 'handle_traffic_block_persist' ) );
@@ -198,6 +206,7 @@ class Admin_UI {
 		add_action( 'admin_post_wp_sam_cache_control_cdn_acknowledge', array( $this, 'handle_cache_control_cdn_acknowledge' ) );
 		add_action( 'admin_post_wp_sam_geoip_save_token', array( $this, 'handle_geoip_save_token' ) );
 		add_action( 'admin_post_wp_sam_geoip_country_block_save', array( $this, 'handle_geoip_country_block_save' ) );
+		add_action( 'admin_post_wp_sam_site_country_save', array( $this, 'handle_site_country_save' ) );
 		add_action( 'admin_post_wp_sam_network_rule_add', array( $this, 'handle_network_rule_add' ) );
 		add_action( 'admin_post_wp_sam_network_rule_delete', array( $this, 'handle_network_rule_delete' ) );
 		add_action( 'admin_post_wp_sam_agents_rules_refresh', array( $this, 'handle_agents_rules_refresh' ) );
@@ -232,6 +241,7 @@ class Admin_UI {
 		add_action( 'wp_ajax_wp_sam_set_dependency_mode', array( $this, 'ajax_set_dependency_mode' ) );
 		add_action( 'wp_ajax_wp_sam_classify_dependency', array( $this, 'ajax_classify_dependency' ) );
 		add_action( 'wp_ajax_wp_sam_suggest_dependency_sri', array( $this, 'ajax_suggest_dependency_sri' ) );
+		add_action( 'wp_ajax_wp_sam_reapprove_dependency_sri', array( $this, 'ajax_reapprove_dependency_sri' ) );
 	}
 
 	// ── Menu registration ─────────────────────────────────────────────────────
@@ -511,6 +521,12 @@ class Admin_UI {
 			'security-automation-manager-scripts',
 			'security-automation-manager-xcto',
 			'security-automation-manager-xfo',
+			// Not a technology-standard page either: its four tabs are each
+			// linked from the lifecycle stage they belong to (Timeline from
+			// Observe, Campaigns from Decide, Honey Paths from Control,
+			// Change Windows from Verify), so a sixth top-level entry beside
+			// the lifecycle only split the same navigation in two.
+			'security-automation-manager-advanced',
 		);
 
 		$rules = '';
@@ -770,6 +786,13 @@ class Admin_UI {
 			'security-automation-manager_page_security-automation-manager-intelligence',
 			'security-automation-manager_page_security-automation-manager-traffic',
 			'security-automation-manager_page_security-automation-manager-baseline',
+			// Missing from 2.9.44 (when the page was added) until 2.11.5: the
+			// page rendered without admin.css (every info popover stayed open,
+			// stacked down the table) and without admin.js, whose shared
+			// Reason field is the only way the Campaigns forms get their
+			// required note -- so Acknowledge, Dismiss and Block all silently
+			// did nothing. AdminUITest now checks every registered page.
+			'security-automation-manager_page_security-automation-manager-advanced',
 		);
 	}
 
@@ -1335,6 +1358,30 @@ class Admin_UI {
 		exit;
 	}
 
+	public function handle_own_addresses_save(): void {
+		check_admin_referer( 'wp_sam_own_addresses_save' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to manage traffic controls.', 'vcns-security-automation-manager' ) );
+		}
+
+		$result = Own_Address_Store::save( sanitize_textarea_field( wp_unslash( $_POST['own_addresses'] ?? '' ) ) );
+
+		// Exempting an address from automatic blocking is worth a record of who did it.
+		$this->plugin->audit->log(
+			'traffic_controls',
+			'own_addresses_saved',
+			sprintf( 'This site\'s own addresses set to: %s.', empty( $result['saved'] ) ? '(none)' : implode( ', ', $result['saved'] ) ),
+			'info'
+		);
+
+		if ( ! empty( $result['rejected'] ) ) {
+			set_transient( 'wp_sam_own_addresses_rejected_' . get_current_user_id(), $result['rejected'], 5 * MINUTE_IN_SECONDS );
+		}
+
+		wp_safe_redirect( admin_url( 'admin.php?page=security-automation-manager-traffic&tab=ip-rules&own_saved=1#wp-sam-own-addresses' ) );
+		exit;
+	}
+
 	public function handle_traffic_block_release(): void {
 		check_admin_referer( 'wp_sam_traffic_block_release' );
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -1644,7 +1691,9 @@ class Admin_UI {
 				$campaign,
 				get_current_user_id(),
 				$note,
-				new Ip_Rule_Store()
+				new Ip_Rule_Store(),
+				Campaign_Detector::DEFAULT_WINDOW_HOURS,
+				Ip_Resolver::resolve()
 			);
 		}
 
@@ -1889,6 +1938,24 @@ class Admin_UI {
 		}
 
 		wp_safe_redirect( admin_url( 'admin.php?page=security-automation-manager-traffic&tab=network-intelligence&subtab=geoip' ) );
+		exit;
+	}
+
+	/**
+	 * Saves "Where does this website operate?" on the Geo-IP sub-tab, which
+	 * only narrows the sanctions lists the Country Block List's "Select by
+	 * group" offers (see Site_Country). An unknown code is ignored and the
+	 * previous choice kept.
+	 */
+	public function handle_site_country_save(): void {
+		check_admin_referer( 'wp_sam_site_country_save' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to change Geo-IP settings.', 'vcns-security-automation-manager' ) );
+		}
+
+		Site_Country::save( sanitize_text_field( wp_unslash( $_POST['site_country'] ?? '' ) ) );
+
+		wp_safe_redirect( admin_url( 'admin.php?page=security-automation-manager-traffic&tab=network-intelligence&subtab=geoip#wp-sam-site-country' ) );
 		exit;
 	}
 
@@ -2440,6 +2507,14 @@ class Admin_UI {
 	// ── Admin notices ─────────────────────────────────────────────────────────
 
 	public function display_admin_notices(): void {
+		// admin_notices fires on every wp-admin screen, including a
+		// subscriber's own profile.php, and the queue below is drained the
+		// first time it renders -- so only a user who can open SAM's own
+		// pages (manage_options, see add_menu_pages()) may see or clear it.
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
 		// Platform constraint warning (R9): wp-admin strict CSP is best-effort because
 		// WordPress core Trac #59446 is unresolved. Only show when the admin surface
 		// profile is in enforce mode, and only once per session per user.
@@ -2469,28 +2544,137 @@ class Admin_UI {
 			$type    = 'error' === $notice['severity'] ? 'error' : 'warning';
 			$key     = $notice['component'] . '/' . $notice['event'];
 			$summary = self::ADMIN_NOTICE_SUMMARIES[ $key ] ?? null;
+			$action  = $this->admin_notice_action( (string) $notice['component'], (string) $notice['event'] );
+			$link    = null === $action
+				? ''
+				: sprintf( ' <a href="%1$s">%2$s</a>', esc_url( $action['url'] ), esc_html( $action['label'] ) );
 
 			if ( null === $summary ) {
 				printf(
-					'<div class="notice notice-%1$s is-dismissible"><p><strong>%2$s</strong> [%3$s] %4$s</p></div>',
+					'<div class="notice notice-%1$s is-dismissible"><p><strong>%2$s</strong> [%3$s] %4$s%5$s</p></div>',
 					esc_attr( $type ),
 					esc_html__( 'Security Automation Manager:', 'vcns-security-automation-manager' ),
 					esc_html( $key ),
-					esc_html( $notice['detail'] )
+					esc_html( $notice['detail'] ),
+					$link // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- URL and label escaped while building $link above.
 				);
 				continue;
 			}
 
 			printf(
-				'<div class="notice notice-%1$s is-dismissible"><p><strong>%2$s</strong> %3$s</p><details><summary>%4$s</summary><p class="description"><code>%5$s</code></p></details></div>',
+				'<div class="notice notice-%1$s is-dismissible"><p><strong>%2$s</strong> %3$s%6$s</p><details><summary>%4$s</summary><p class="description"><code>%5$s</code></p></details></div>',
 				esc_attr( $type ),
 				esc_html__( 'Security Automation Manager:', 'vcns-security-automation-manager' ),
 				esc_html( $summary ),
 				esc_html__( 'Technical detail (for a developer)', 'vcns-security-automation-manager' ),
-				esc_html( $key . ': ' . $notice['detail'] )
+				esc_html( $key . ': ' . $notice['detail'] ),
+				$link // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- URL and label escaped while building $link above.
 			);
 		}
 		delete_option( 'wp_sam_admin_notices' );
+	}
+
+	/**
+	 * The admin page (and tab) where a queued notice can be acted on, so
+	 * the notice links straight there instead of only naming the page in
+	 * its text. Covers every component that logs at warning/error severity
+	 * (the only severities Audit_Log queues as notices); returns null for
+	 * anything else.
+	 *
+	 * Labels name the route as staff actually see it: the left-hand menu
+	 * shows only Settings, Observe, Decide, Control and Verify, and every
+	 * other SAM page (CSP, Scripts, Traffic Controls, Certificates, ...) is
+	 * hidden from it by print_hidden_menu_css() and reached through a link
+	 * on one of those five. Each label below uses the stage and the link
+	 * text that stage's own page shows; URLs match those links. See the
+	 * "Admin navigation" section of CLAUDE.md.
+	 *
+	 * @return array{url: string, label: string}|null
+	 */
+	private function admin_notice_action( string $component, string $event ): ?array {
+		$csp     = static fn ( string $tab ): string => admin_url( 'admin.php?page=security-automation-manager-dashboard&tab=' . $tab );
+		$network = static fn ( string $subtab ): string => admin_url( 'admin.php?page=security-automation-manager-traffic&tab=network-intelligence&subtab=' . $subtab );
+
+		switch ( $component ) {
+			case 'dependency_integrity_monitor':
+				return array(
+					'url'   => admin_url( 'admin.php?page=security-automation-manager-scripts&tab=external' ),
+					'label' => __( 'Open Decide → Dependency Classification', 'vcns-security-automation-manager' ),
+				);
+
+			case 'discovery':
+				return array(
+					'url'   => $csp( 'scan-log' ),
+					'label' => __( 'Open Observe → Scan Log', 'vcns-security-automation-manager' ),
+				);
+
+			case 'conflict_detector':
+				// The competing-header banner shows above every CSP tab.
+				return array(
+					'url'   => $csp( 'profiles' ),
+					'label' => __( 'Open Control → CSP Profiles', 'vcns-security-automation-manager' ),
+				);
+
+			case 'policy_builder':
+			case 'hash_manager':
+				return array(
+					'url'   => $csp( 'policy-audit' ),
+					'label' => __( 'Open Verify → CSP Policy Audit', 'vcns-security-automation-manager' ),
+				);
+
+			case 'policy_change':
+				if ( 'admin_csp_held_report_only' === $event ) {
+					return array(
+						'url'   => $csp( 'profiles' ),
+						'label' => __( 'Open Control → CSP Profiles', 'vcns-security-automation-manager' ),
+					);
+				}
+				return array(
+					'url'   => $csp( 'sources' ),
+					'label' => __( 'Open Decide → For Review', 'vcns-security-automation-manager' ),
+				);
+
+			case 'certificates':
+				return array(
+					'url'   => admin_url( 'admin.php?page=security-automation-manager-certificates&tab=renew' ),
+					'label' => __( 'Open Control → Certificates', 'vcns-security-automation-manager' ),
+				);
+
+			case 'config_portability':
+				return array(
+					'url'   => admin_url( 'admin.php?page=security-automation-manager&tab=recovery#wp-sam-portability' ),
+					'label' => __( 'Open Settings → Recovery', 'vcns-security-automation-manager' ),
+				);
+
+			case 'rollback':
+				return array(
+					'url'   => admin_url( 'admin.php?page=security-automation-manager&tab=recovery' ),
+					'label' => __( 'Open Settings → Recovery', 'vcns-security-automation-manager' ),
+				);
+
+			case 'scheduler':
+				if ( str_starts_with( $event, 'tor_exit_list_' ) ) {
+					return array(
+						'url'   => $network( 'tor' ),
+						'label' => __( 'Open Control → Traffic Controls → Tor Exit List', 'vcns-security-automation-manager' ),
+					);
+				}
+				// The six well-known-file refreshes (robots_rules_, agents_rules_,
+				// security_txt_, humans_txt_, ads_txt_, app_ads_txt_).
+				if ( 1 === preg_match( '/^(robots_rules|agents_rules|security_txt|humans_txt|ads_txt|app_ads_txt)_/', $event ) ) {
+					return array(
+						'url'   => $network( 'well-known' ),
+						'label' => __( 'Open Control → Traffic Controls → Well-Known Files', 'vcns-security-automation-manager' ),
+					);
+				}
+				// scan_exception / manual_scan_exception.
+				return array(
+					'url'   => $csp( 'scan-log' ),
+					'label' => __( 'Open Observe → Scan Log', 'vcns-security-automation-manager' ),
+				);
+		}
+
+		return null;
 	}
 
 	/**
@@ -2688,7 +2872,7 @@ class Admin_UI {
 		$surface = sanitize_text_field( wp_unslash( $_POST['surface'] ?? '' ) );
 		$mode    = sanitize_text_field( wp_unslash( $_POST['mode'] ?? '' ) );
 
-		if ( ! in_array( $surface, array( 'frontend', 'admin', 'login', 'api' ), true ) ) {
+		if ( ! in_array( $surface, Csp_Surfaces::ALL, true ) ) {
 			wp_send_json_error( array( 'message' => 'Invalid surface.' ) );
 		}
 		if ( ! in_array( $mode, array( 'report-only', 'enforce', 'disabled' ), true ) ) {
@@ -2739,7 +2923,7 @@ class Admin_UI {
 		$surface = sanitize_text_field( wp_unslash( $_POST['surface'] ?? '' ) );
 		$enabled = ! empty( $_POST['enabled'] );
 
-		if ( ! in_array( $surface, array( 'frontend', 'admin', 'login', 'api' ), true ) ) {
+		if ( ! in_array( $surface, Csp_Surfaces::ALL, true ) ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid surface.', 'vcns-security-automation-manager' ) ) );
 		}
 
@@ -2776,7 +2960,7 @@ class Admin_UI {
 		$flag    = sanitize_key( wp_unslash( $_POST['flag'] ?? '' ) );
 		$enabled = ! empty( $_POST['enabled'] );
 
-		if ( ! in_array( $surface, array( 'frontend', 'admin', 'login', 'api' ), true ) ) {
+		if ( ! in_array( $surface, Csp_Surfaces::ALL, true ) ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid surface.', 'vcns-security-automation-manager' ) ) );
 		}
 
@@ -2822,7 +3006,7 @@ class Admin_UI {
 		$surface = sanitize_text_field( wp_unslash( $_POST['surface'] ?? '' ) );
 		$mode    = sanitize_text_field( wp_unslash( $_POST['mode'] ?? '' ) );
 
-		if ( ! in_array( $surface, Automation_Config::SURFACES, true ) ) {
+		if ( ! in_array( $surface, Csp_Surfaces::ALL, true ) ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid surface.', 'vcns-security-automation-manager' ) ) );
 		}
 
@@ -3167,6 +3351,12 @@ class Admin_UI {
 	 * endpoint automatically as soon as ajax_suggest_dependency_sri()
 	 * returns a hash (see admin.js) -- there is no separate confirmation
 	 * step between "fetch and hash" and "save as the pinned value."
+	 *
+	 * Also records pinned_url (schema v48), the exact URL whose content the
+	 * hash was taken from, which Pinned_Dependency_Checker re-fetches daily:
+	 * the URL Suggest hashed (posted as pinned_url, same-origin checked), or
+	 * on a manual pin the row's last_seen_url at that moment. A new hash, or
+	 * leaving immutable_pinned, clears any recorded drift.
 	 */
 	public function ajax_classify_dependency(): void {
 		check_ajax_referer( 'wp_sam_admin_nonce', 'nonce' );
@@ -3177,6 +3367,7 @@ class Admin_UI {
 		$id             = (int) ( $_POST['id'] ?? 0 );
 		$classification = sanitize_text_field( wp_unslash( $_POST['classification'] ?? '' ) );
 		$expected_sri   = sanitize_text_field( wp_unslash( $_POST['expected_sri'] ?? '' ) );
+		$posted_pin_url = esc_url_raw( trim( (string) wp_unslash( $_POST['pinned_url'] ?? '' ) ) );
 
 		if ( $id <= 0 ) {
 			wp_send_json_error( array( 'message' => __( 'Invalid entry.', 'vcns-security-automation-manager' ) ) );
@@ -3188,7 +3379,7 @@ class Admin_UI {
 
 		$sanitized_sri = null;
 		if ( 'immutable_pinned' === $classification && '' !== trim( $expected_sri ) ) {
-			if ( ! preg_match( '/^sha(256|384|512)-[A-Za-z0-9+\/]+=*$/', trim( $expected_sri ) ) ) {
+			if ( null === Dependency_Sri_Fetcher::algorithm_of( $expected_sri ) ) {
 				wp_send_json_error( array( 'message' => __( 'Expected SRI hash must look like sha256-…, sha384-… or sha512-… (base64).', 'vcns-security-automation-manager' ) ) );
 			}
 			$sanitized_sri = trim( $expected_sri );
@@ -3196,15 +3387,50 @@ class Admin_UI {
 
 		global $wpdb;
 		$table = $wpdb->prefix . 'sam_dependency_inventory';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$row = $wpdb->get_row( $wpdb->prepare( "SELECT origin, expected_sri, last_seen_url, pinned_url FROM {$table} WHERE id = %d", $id ), ARRAY_A );
+		if ( empty( $row ) ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid entry.', 'vcns-security-automation-manager' ) ) );
+		}
+
+		$origin      = (string) $row['origin'];
+		$sri_changed = trim( (string) ( $row['expected_sri'] ?? '' ) ) !== (string) $sanitized_sri;
+		$pinned_url  = null;
+		if ( null !== $sanitized_sri ) {
+			if ( '' !== $posted_pin_url ) {
+				if ( ! Dependency_Sri_Fetcher::is_allowed_url( $posted_pin_url, $origin ) ) {
+					wp_send_json_error( array( 'message' => __( 'That URL must be an https:// URL on the same origin already shown for this row.', 'vcns-security-automation-manager' ) ) );
+				}
+				$pinned_url = $posted_pin_url;
+			} elseif ( $sri_changed || '' === trim( (string) ( $row['pinned_url'] ?? '' ) ) ) {
+				$last_seen  = trim( (string) ( $row['last_seen_url'] ?? '' ) );
+				$pinned_url = Dependency_Sri_Fetcher::is_allowed_url( $last_seen, $origin ) ? $last_seen : null;
+			} else {
+				$pinned_url = (string) $row['pinned_url'];
+			}
+		}
+
+		$data = array(
+			'classification' => $classification,
+			'expected_sri'   => $sanitized_sri,
+			'pinned_url'     => $pinned_url,
+			'updated_at'     => current_time( 'mysql', true ),
+		);
+		if ( null === $sanitized_sri || $sri_changed ) {
+			// A different hash (or no longer pinned) makes any recorded
+			// drift and check result stale.
+			$data['drift_detected_at']      = null;
+			$data['drift_observed_sri']     = null;
+			$data['integrity_checked_at']   = null;
+			$data['integrity_attempted_at'] = null;
+			$data['integrity_check_error']  = null;
+		}
+
 		$wpdb->update(
 			$table,
-			array(
-				'classification' => $classification,
-				'expected_sri'   => $sanitized_sri,
-				'updated_at'     => current_time( 'mysql', true ),
-			),
+			$data,
 			array( 'id' => $id ),
-			array( '%s', '%s', '%s' ),
+			array_fill( 0, count( $data ), '%s' ),
 			array( '%d' )
 		);
 
@@ -3217,19 +3443,15 @@ class Admin_UI {
 	 * This method itself only ever returns the computed hash to the browser
 	 * and writes nothing -- but the admin UI's "Suggest" button (admin.js)
 	 * immediately posts that returned hash on to ajax_classify_dependency()
-	 * and saves it as the pinned "Expected SRI" value, with no separate
-	 * confirmation click in between. The trust boundary here is "you typed
-	 * or accepted this exact URL," not "you separately reviewed the
-	 * resulting hash before it took effect."
+	 * (with the URL, as pinned_url) and saves it as the pinned "Expected
+	 * SRI" value, with no separate confirmation click in between. The trust
+	 * boundary here is "you typed or accepted this exact URL," not "you
+	 * separately reviewed the resulting hash before it took effect."
 	 *
 	 * Deliberately restricted to a URL whose origin already matches an
 	 * origin this plugin has itself observed on a real page load (the
-	 * inventory row identified by $id): this endpoint fetches whatever URL
-	 * it's given, so without that restriction it would be a same-origin-only
-	 * fetch proxy an authenticated admin could point at anything. Requiring
-	 * the origin to match a known, passively-discovered one keeps its blast
-	 * radius to "third-party assets this site already loads" rather than
-	 * arbitrary internal/external URLs.
+	 * inventory row identified by $id) -- see Dependency_Sri_Fetcher, which
+	 * holds that guard for both this and the daily drift check.
 	 */
 	public function ajax_suggest_dependency_sri(): void {
 		check_ajax_referer( 'wp_sam_admin_nonce', 'nonce' );
@@ -3256,35 +3478,96 @@ class Admin_UI {
 			wp_send_json_error( array( 'message' => __( 'Invalid entry.', 'vcns-security-automation-manager' ) ) );
 		}
 
-		$url_origin = Dependency_Governance_Builder::normalize_origin( $url );
-		if ( null === $url_origin || $url_origin !== $row['origin'] ) {
-			wp_send_json_error( array( 'message' => __( 'That URL must be on the same origin already shown for this row.', 'vcns-security-automation-manager' ) ) );
+		$result = Dependency_Sri_Fetcher::fetch_and_hash( $url, (string) $row['origin'] );
+		if ( empty( $result['ok'] ) ) {
+			$messages = array(
+				Dependency_Sri_Fetcher::ERROR_ORIGIN_MISMATCH => __( 'That URL must be on the same origin already shown for this row.', 'vcns-security-automation-manager' ),
+				Dependency_Sri_Fetcher::ERROR_FETCH_FAILED => __( 'Could not fetch that URL.', 'vcns-security-automation-manager' ),
+				Dependency_Sri_Fetcher::ERROR_HTTP_STATUS  => __( 'That URL did not return a successful response.', 'vcns-security-automation-manager' ),
+				Dependency_Sri_Fetcher::ERROR_EMPTY_OR_LARGE => __( 'That URL returned an empty or unexpectedly large response.', 'vcns-security-automation-manager' ),
+			);
+			$error    = (string) ( $result['error'] ?? '' );
+			wp_send_json_error( array( 'message' => $messages[ $error ] ?? __( 'Only https:// URLs can be hashed.', 'vcns-security-automation-manager' ) ) );
 		}
 
-		$response = wp_remote_get(
-			$url,
+		wp_send_json_success(
 			array(
-				'timeout'   => 10,
-				'sslverify' => true,
+				'hash' => $result['hash'],
+				'url'  => $url,
 			)
 		);
-		if ( is_wp_error( $response ) ) {
-			wp_send_json_error( array( 'message' => __( 'Could not fetch that URL.', 'vcns-security-automation-manager' ) ) );
-		}
-		if ( 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
-			wp_send_json_error( array( 'message' => __( 'That URL did not return a successful response.', 'vcns-security-automation-manager' ) ) );
+	}
+
+	/**
+	 * "Re-approve new hash" for a pinned dependency whose file changed at
+	 * its source (Pinned_Dependency_Checker recorded drift_observed_sri).
+	 * An explicit administrator decision: copies drift_observed_sri into
+	 * expected_sri, keeps pinned_url, clears the drift fields, and records
+	 * the old and new hash in the audit log.
+	 *
+	 * This only changes what SAM compares against. The integrity attribute
+	 * in the theme/plugin markup that loads the file is not SAM's to change
+	 * (SAM never injects one), so the response returns the new hash for the
+	 * page to show with a copy button, and the browser keeps blocking the
+	 * file until that attribute is updated too.
+	 */
+	public function ajax_reapprove_dependency_sri(): void {
+		check_ajax_referer( 'wp_sam_admin_nonce', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( null, 403 );
 		}
 
-		$body = wp_remote_retrieve_body( $response );
-		// 5 MB is generously above any legitimate third-party script/stylesheet;
-		// guards against hashing an unexpectedly huge response.
-		if ( '' === $body || strlen( $body ) > 5 * MB_IN_BYTES ) {
-			wp_send_json_error( array( 'message' => __( 'That URL returned an empty or unexpectedly large response.', 'vcns-security-automation-manager' ) ) );
+		$id = (int) ( $_POST['id'] ?? 0 );
+		if ( $id <= 0 ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid entry.', 'vcns-security-automation-manager' ) ) );
 		}
 
-		$hash = 'sha384-' . base64_encode( hash( 'sha384', $body, true ) );
+		global $wpdb;
+		$table = $wpdb->prefix . 'sam_dependency_inventory';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$row = $wpdb->get_row( $wpdb->prepare( "SELECT surface, resource_type, origin, classification, expected_sri, pinned_url, drift_observed_sri FROM {$table} WHERE id = %d", $id ), ARRAY_A );
+		if ( empty( $row ) ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid entry.', 'vcns-security-automation-manager' ) ) );
+		}
 
-		wp_send_json_success( array( 'hash' => $hash ) );
+		$observed = trim( (string) ( $row['drift_observed_sri'] ?? '' ) );
+		if ( 'immutable_pinned' !== $row['classification'] || null === Dependency_Sri_Fetcher::algorithm_of( $observed ) ) {
+			wp_send_json_error( array( 'message' => __( 'There is no changed hash to re-approve for this entry.', 'vcns-security-automation-manager' ) ) );
+		}
+
+		$now = current_time( 'mysql', true );
+		$wpdb->update(
+			$table,
+			array(
+				'expected_sri'           => $observed,
+				'drift_detected_at'      => null,
+				'drift_observed_sri'     => null,
+				'integrity_checked_at'   => $now,
+				'integrity_attempted_at' => $now,
+				'integrity_check_error'  => null,
+				'updated_at'             => $now,
+			),
+			array( 'id' => $id ),
+			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s' ),
+			array( '%d' )
+		);
+
+		$url = trim( (string) ( $row['pinned_url'] ?? '' ) );
+		$this->plugin->audit->log(
+			'dependency_integrity_monitor',
+			'pinned_hash_reapproved',
+			sprintf(
+				'Re-approved the changed %1$s at %2$s (%3$s surface): pinned hash %4$s replaced by %5$s. The integrity attribute in the markup that loads it must be updated to the new value too.',
+				(string) $row['resource_type'],
+				'' !== $url ? $url : (string) $row['origin'],
+				(string) $row['surface'],
+				trim( (string) ( $row['expected_sri'] ?? '' ) ),
+				$observed
+			),
+			'info'
+		);
+
+		wp_send_json_success( array( 'hash' => $observed ) );
 	}
 
 	// ── Promotion gate ────────────────────────────────────────────────────────
@@ -3382,7 +3665,7 @@ class Admin_UI {
 		// Site-wide, not surface-scoped -- see Conflict_Detector::
 		// has_recent_conflicts()'s own docblock for why.
 		if ( ( new Conflict_Detector( $this->plugin->audit ) )->has_recent_conflicts() ) {
-			return __( 'Cannot promote to enforce: a competing Content-Security-Policy header was detected recently. Review the conflict banner on the CSP dashboard before enabling enforcement.', 'vcns-security-automation-manager' );
+			return __( 'Cannot promote to enforce: a competing Content-Security-Policy header was detected recently. Review the competing-header banner at the top of this page before enabling enforcement.', 'vcns-security-automation-manager' );
 		}
 
 		// External verification (roadmap §10.3) is not a gate here -- no

@@ -17,6 +17,7 @@ declare( strict_types=1 );
 namespace WP_SAM\CSP;
 
 use WP_SAM\Modules\Audit_Log;
+use WP_SAM\Security\Conflict_Probe_Token;
 use WP_SAM\Security\Reporting_Endpoint;
 use WP_SAM\Security\Request_Surface;
 
@@ -159,14 +160,20 @@ class Conflict_Detector {
 	 * @return array       List of conflicting header names found.
 	 */
 	public function run_probe( string $url ): array {
+		$token    = Conflict_Probe_Token::issue();
 		$response = wp_remote_head(
 			$url,
 			array(
-				'timeout'   => 10,
-				'sslverify' => true,
-				'headers'   => array( Request_Surface::CONFLICT_PROBE_HEADER => '1' ),
+				'timeout'     => 10,
+				'sslverify'   => true,
+				// WordPress already defaults HEAD requests to no redirects;
+				// stated explicitly so the token can never be forwarded to
+				// another host.
+				'redirection' => 0,
+				'headers'     => array( Request_Surface::CONFLICT_PROBE_HEADER => $token ),
 			)
 		);
+		Conflict_Probe_Token::revoke( $token );
 
 		if ( is_wp_error( $response ) ) {
 			return array();

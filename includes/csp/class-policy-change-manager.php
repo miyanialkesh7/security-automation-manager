@@ -87,6 +87,18 @@ class Policy_Change_Manager {
 			);
 		}
 
+		// Single choke point for both learning paths (Discovery crawls and
+		// Violation_Reporter): nothing is ever proposed for a surface CSP
+		// doesn't manage -- see Csp_Surfaces for why 'api' isn't one.
+		if ( ! in_array( $surface, Csp_Surfaces::ALL, true ) ) {
+			return array(
+				'status'      => 'invalid',
+				'id'          => 0,
+				'risk_level'  => 'high',
+				'risk_reason' => 'Not a CSP surface.',
+			);
+		}
+
 		$risk        = $this->classify_source_risk( $directive, $scheme, $host, $uri );
 		$fingerprint = self::fingerprint( $surface, $directive, $host );
 

@@ -22,11 +22,11 @@ final class App_Ads_Txt_Store {
 
 	private const MAX_RECORDS = 2000;
 
-	/** @var callable(string):(array|\WP_Error) Real wp_remote_get() by default; injectable so tests never make a real HTTP call. */
+	/** @var callable(string):(array|\WP_Error) Same_Host_Fetcher (wp_remote_get() that never follows a redirect off this site) by default; injectable so tests never make a real HTTP call. */
 	private $http_get;
 
 	public function __construct( ?callable $http_get = null ) {
-		$this->http_get = $http_get ?? static fn ( string $url ) => wp_remote_get(
+		$this->http_get = $http_get ?? static fn ( string $url ) => ( new Same_Host_Fetcher() )->get(
 			$url,
 			array(
 				'timeout'    => 10,
@@ -61,7 +61,9 @@ final class App_Ads_Txt_Store {
 
 	/**
 	 * Fetches this site's own /app-ads.txt and replaces the cached record
-	 * set on success. Never touches cached records on failure.
+	 * set on success, or clears it when the site has no such file (HTTP
+	 * 404/410 -- an answer, not a failure). Never touches cached records
+	 * on failure.
 	 *
 	 * @return array{status:string, count:int, message:string}
 	 */
@@ -73,6 +75,9 @@ final class App_Ads_Txt_Store {
 		}
 
 		$code = (int) wp_remote_retrieve_response_code( $response );
+		if ( 404 === $code || 410 === $code ) {
+			return $this->record_absent( $code );
+		}
 		if ( 200 !== $code ) {
 			return $this->record_failure( "Fetch returned HTTP {$code}." );
 		}
@@ -122,6 +127,19 @@ final class App_Ads_Txt_Store {
 		}
 
 		return $records;
+	}
+
+	/** @return array{status:string, count:int, message:string} */
+	private function record_absent( int $code ): array {
+		delete_option( 'wp_sam_app_ads_txt_records' );
+		update_option( 'wp_sam_app_ads_txt_refreshed_at', current_time( 'mysql', true ) );
+		update_option( 'wp_sam_app_ads_txt_last_fetch_status', 'absent' );
+
+		return array(
+			'status'  => 'absent',
+			'count'   => 0,
+			'message' => "No /app-ads.txt on this site (HTTP {$code}).",
+		);
 	}
 
 	/** @return array{status:string, count:int, message:string} */
