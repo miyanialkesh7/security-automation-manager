@@ -130,7 +130,7 @@
 	border: 1px solid #dcdcde;
 }
 
-/* Settings/Overview status badges. Rendered by WP_SAM\Admin\Status_Badge --
+/* Settings → All status badges. Rendered by WP_SAM\Admin\Status_Badge --
    the Layer 4/Layer 5 pillar tables' cross-pillar status vocabulary.
    Colour values mirror .mode-report-only/.mode-enforce/.wp-sam-readiness-badge
    above for visual consistency, but this is a deliberately separate class
@@ -504,15 +504,20 @@ details.wp-sam-filter-form form {
 
 /*
  * Geo-IP country grid (Traffic Controls > Network Intelligence > Geo-IP):
- * a flowing multi-column list of checkboxes, one per ISO country, instead
- * of a single narrow list -- wide enough to actually use the page instead
- * of leaving most of it empty.
+ * one checkbox per ISO country, in as many alphabetical columns as the
+ * page has room for.
+ *
+ * Deliberately no height cap and no column-count cap. A multi-column box
+ * with a fixed height doesn't scroll down -- it adds overflow columns to
+ * the right -- so the old 420px cap hid most countries behind a
+ * horizontal scrollbar, and the old 4-column cap made each column on a
+ * wide screen about twice as wide as the names in it. Names too long for
+ * a column wrap under themselves (the hanging indent clears the
+ * checkbox) instead of running into the next column.
  */
 .wp-sam-country-grid {
-	columns: 220px 4;
+	column-width: 14em;
 	column-gap: 1.5em;
-	max-height: 420px;
-	overflow-y: auto;
 	border: 1px solid #dcdcde;
 	background: #fff;
 	padding: 12px 16px;
@@ -521,8 +526,29 @@ details.wp-sam-filter-form form {
 
 .wp-sam-country-grid label {
 	display: block;
-	white-space: nowrap;
-	padding: 2px 0;
+	break-inside: avoid;
+	padding: 2px 0 2px 1.5rem;
+	text-indent: -1.5rem;
+}
+
+.wp-sam-country-groups {
+	border: 1px solid #dcdcde;
+	background: #f6f7f7;
+	padding: 12px 16px;
+	margin-bottom: 0.5em;
+}
+
+.wp-sam-country-groups select {
+	max-width: 100%;
+	margin-right: 0.5em;
+}
+
+.wp-sam-country-group-details p {
+	margin: 0.5em 0;
+}
+
+.wp-sam-country-count {
+	margin-bottom: 0;
 }
 
 /*
@@ -664,6 +690,13 @@ details.wp-sam-filter-form form {
 	.wp-sam-stat-row {
 		flex-direction: column;
 	}
+
+	/* WordPress enlarges checkboxes at this width; the country grid's
+	   hanging indent has to grow with them. */
+	.wp-sam-country-grid label {
+		padding-left: 2.1rem;
+		text-indent: -2.1rem;
+	}
 }
 
 /*
@@ -786,4 +819,61 @@ details.wp-sam-filter-form form {
 .wp-sam-col-actions {
 	width: 1%;
 	white-space: nowrap;
+}
+
+/* ── Settings → All: the Layer 1–5 tables ───────────────────────────────────
+ *
+ * Five short tables stacked down one page, each with the same three
+ * columns. Under the auto layout every other SAM table uses, each sized
+ * its columns from its own content -- Layer 2 and 4's Status cells hold a
+ * row of per-surface badges that `nowrap` kept on one line -- so no two
+ * layers' columns lined up. A fixed layout with shared widths makes every
+ * layer read as one continuous table, and lets the badges wrap.
+ */
+.wp-sam-layer-table {
+	table-layout: fixed;
+	width: 100%;
+}
+
+.wp-sam-layer-table th,
+.wp-sam-layer-table td {
+	padding: 10px 12px;
+	vertical-align: middle;
+}
+
+.wp-sam-layer-table .wp-sam-col-primary {
+	width: 26%;
+	min-width: 0;
+}
+
+.wp-sam-layer-table .wp-sam-col-status {
+	width: 52%;
+	white-space: normal;
+	line-height: 1.9;
+}
+
+.wp-sam-layer-table .wp-sam-col-actions {
+	width: 22%;
+	white-space: normal;
+	overflow-wrap: break-word;
+}
+
+.wp-sam-layer-table .wp-sam-col-status .wp-sam-status-badge,
+.wp-sam-layer-table .wp-sam-col-status .wp-sam-readiness-badge {
+	margin: 2px 6px 2px 0;
+	white-space: nowrap;
+}
+
+/* Below this width the fixed shares get too narrow for the badge rows;
+ * fall back to the auto layout and let .wp-sam-table-wrap scroll. */
+@media screen and (max-width: 782px) {
+	.wp-sam-layer-table {
+		table-layout: auto;
+	}
+
+	.wp-sam-layer-table .wp-sam-col-primary,
+	.wp-sam-layer-table .wp-sam-col-status,
+	.wp-sam-layer-table .wp-sam-col-actions {
+		width: auto;
+	}
 }

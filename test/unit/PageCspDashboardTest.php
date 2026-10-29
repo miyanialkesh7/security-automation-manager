@@ -374,6 +374,32 @@ class PageCspDashboardTest extends TestCase {
 		);
 	}
 
+	public function test_violations_tab_summarises_each_csp_surface_separately(): void {
+		$_GET['tab']              = 'violations';
+		$GLOBALS['_wpdb_get_var'] = 0;
+		$GLOBALS['_wp_options']['wp_sam_csp_delivery_admin'] = array(
+			'first_sent'     => time() - DAY_IN_SECONDS,
+			'last_sent'      => time() - 60,
+			'last_throttled' => time() - 120,
+		);
+
+		ob_start();
+		require WP_SAM_DIR . 'includes/admin/views/page-csp-dashboard.php';
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['tab'] );
+
+		$this->assertStringContainsString( 'wp-sam-violations-by-surface', $output );
+		$this->assertStringContainsString( 'v_surface=admin', $output );
+		$this->assertStringContainsString( 'v_surface=login', $output );
+		$this->assertStringContainsString( 'refused by the endpoint', $output );
+		$this->assertStringContainsString( 'No policy has been sent on this surface yet', $output );
+		$this->assertStringContainsString(
+			"GROUP BY profile_surface",
+			implode( "\n", $GLOBALS['_wpdb_get_results_log'] )
+		);
+	}
+
 	public function test_policy_changes_tab_offers_and_lists_only_csp_surfaces(): void {
 		$_GET['tab'] = 'policy-changes';
 

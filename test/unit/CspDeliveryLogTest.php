@@ -73,4 +73,14 @@ class CspDeliveryLogTest extends TestCase {
 		$this->assertSame( self::NOW, Csp_Delivery_Log::get( 'frontend' )['last_sent'] );
 		$this->assertSame( self::NOW + 10, Csp_Delivery_Log::get( 'admin' )['last_sent'] );
 	}
+
+	public function test_throttling_is_recorded_and_throttled_without_touching_delivery(): void {
+		Csp_Delivery_Log::record_throttled( 'admin', 1000 );
+		Csp_Delivery_Log::record_throttled( 'admin', 1000 + 60 );
+
+		$this->assertSame( array( 'last_throttled' => 1000 ), Csp_Delivery_Log::get( 'admin' ) );
+
+		Csp_Delivery_Log::record_throttled( 'admin', 1000 + 301 );
+		$this->assertSame( 1301, Csp_Delivery_Log::get( 'admin' )['last_throttled'] );
+	}
 }

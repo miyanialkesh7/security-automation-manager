@@ -120,23 +120,24 @@ class RobotsRulesStoreTest extends TestCase {
 	}
 
 	public function test_default_fetcher_refuses_a_redirect_to_another_host(): void {
-		// The staging-site case: .htaccess 301s non-approved IPs to the
-		// production domain. Production's robots.txt must never be cached
-		// as this site's own.
+		// An IP allow-list in .htaccess 301s non-approved addresses to
+		// another domain. That site's robots.txt must never be cached as
+		// this site's own, and the message must not say where it went.
 		update_option( 'wp_sam_robots_disallow_rules', array( '/wp-admin/' ) );
 		$GLOBALS['_wp_remote_get_response_queue'] = array(
 			array(
 				'response' => array( 'code' => 301 ),
-				'headers'  => array( 'Location' => 'https://production.example.org/robots.txt' ),
+				'headers'  => array( 'Location' => 'https://other-copy.example.org/robots.txt' ),
 				'body'     => '',
 			),
-			$this->http_response( "User-agent: *\nDisallow: /production-only/\n" ),
+			$this->http_response( "User-agent: *\nDisallow: /other-copy-only/\n" ),
 		);
 
 		$result = ( new Robots_Rules_Store() )->refresh();
 
 		$this->assertSame( 'failed', $result['status'] );
-		$this->assertStringContainsString( 'Redirected to another host (production.example.org, HTTP 301)', $result['message'] );
+		$this->assertStringContainsString( 'Redirected away from this site (HTTP 301)', $result['message'] );
+		$this->assertStringNotContainsString( 'other-copy', $result['message'] );
 		$this->assertSame( array( '/wp-admin/' ), get_option( 'wp_sam_robots_disallow_rules' ) );
 		$this->assertCount( 1, $GLOBALS['_wp_remote_get_requests'] );
 	}

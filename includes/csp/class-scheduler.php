@@ -88,6 +88,7 @@ class Scheduler {
 			$this->purge_old_pillar_violations();
 			$this->purge_old_request_events();
 			$this->purge_stale_traffic_blocks();
+			$hash_mgr->retire_json_data_hashes();
 			$hash_mgr->prune_stale_by_age();
 			$this->run_drift_scan( $plugin );
 			$this->run_campaign_scan();
@@ -140,9 +141,10 @@ class Scheduler {
 			);
 
 			$this->audit->finish_scan( $scan_id, $results );
-			// Same age-based retirement the daily cron runs -- otherwise a site
-			// whose cron rarely fires keeps every stale hash active and in the
-			// header's byte budget until it does.
+			// Same retirement the daily cron runs -- otherwise a site whose cron
+			// rarely fires keeps every stale hash active and in the header's
+			// byte budget until it does.
+			$hash_mgr->retire_json_data_hashes();
 			$hash_mgr->prune_stale_by_age();
 			return $results;
 

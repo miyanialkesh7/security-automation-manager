@@ -5,15 +5,20 @@
  *
  * wp_remote_get() follows up to five redirects by default, wherever they
  * point, and never tells the caller where it finally ended up. That is
- * wrong for a self-fetch: a staging site whose .htaccess sends non-
- * approved IPs to the production domain would silently hand back the
- * production site's robots.txt (or front page) as if it were its own.
- * This disables WordPress's own redirect handling ('redirection' => 0)
- * and follows each hop itself, but only while the Location stays on the
- * originally requested host -- compared case-insensitively and ignoring
- * a leading "www.", so an apex/www canonicalisation or an http->https
- * upgrade still works. A redirect anywhere else returns a
- * wp_sam_offsite_redirect WP_Error instead of being followed.
+ * wrong for a self-fetch: a site whose .htaccess sends non-approved IPs to
+ * another domain would silently hand back that other site's robots.txt (or
+ * front page) as if it were its own. This disables WordPress's own
+ * redirect handling ('redirection' => 0) and follows each hop itself, but
+ * only while the Location stays on the originally requested host --
+ * compared case-insensitively and ignoring a leading "www.", so an
+ * apex/www canonicalisation or an http->https upgrade still works. A
+ * redirect anywhere else returns a wp_sam_offsite_redirect WP_Error
+ * instead of being followed.
+ *
+ * That error deliberately carries only the status code, never the
+ * Location. SAM knows this site's own address and nothing else: where a
+ * redirect pointed is often another copy of the same site (staging and
+ * production), and nothing in SAM may record, show or reason about one.
  */
 
 declare( strict_types=1 );
@@ -60,16 +65,11 @@ final class Same_Host_Fetcher {
 			}
 
 			$next = self::resolve( $location, $current );
-			$host = strtolower( (string) wp_parse_url( $next, PHP_URL_HOST ) );
 			if ( '' === $origin_host || self::normalise_host( $next ) !== $origin_host ) {
 				return new \WP_Error(
 					'wp_sam_offsite_redirect',
-					sprintf( "Redirected to another host (%s, HTTP %d), so this site's own copy could not be read.", '' !== $host ? $host : $location, $code ),
-					array(
-						'host'     => $host,
-						'code'     => $code,
-						'location' => $next,
-					)
+					sprintf( "Redirected away from this site (HTTP %d), so this site's own copy could not be read.", $code ),
+					array( 'code' => $code )
 				);
 			}
 

@@ -141,7 +141,11 @@ Before submission, verify:
 
 - GPL-compatible licensing is clear
 - `readme.txt` is valid and accurate
-- the plugin display name complies with trademark restrictions
+- the plugin display name complies with trademark restrictions. The two names differ on purpose:
+  - the `Plugin Name` header, which wp-admin's Plugins screen shows, is "Security Automation Manager";
+  - `readme.txt`'s title, which the WordPress.org listing shows, stays "VCNS Security Automation Manager", the name WordPress.org's plugin review proposed.
+
+  Change the readme title only with the plugins team's agreement. The slug and text domain stay `vcns-security-automation-manager` either way. `VersionConsistencyTest` pins both names.
 - no remote code execution or code download features exist
 - no custom update process exists in the submitted WordPress.org package
 - external service usage is disclosed clearly in `readme.txt`

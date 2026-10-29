@@ -154,4 +154,12 @@ class CampaignDetectorTest extends TestCase {
 		);
 	}
 
+	public function test_external_ips_excludes_declared_own_addresses(): void {
+		\WP_SAM\Intelligence\Own_Address_Store::save( '185.199.223.7' );
+
+		$this->assertSame(
+			array( '203.0.113.1' ),
+			Campaign_Detector::external_ips( array( '203.0.113.1', '185.199.223.7', '10.16.17.55' ) )
+		);
+	}
 }

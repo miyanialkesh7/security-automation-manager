@@ -69,6 +69,7 @@ use WP_SAM\Security\Cross_Origin_Opener_Policy_Builder;
 use WP_SAM\Security\Cross_Origin_Resource_Policy_Builder;
 use WP_SAM\Security\Dependency_Governance_Builder;
 use WP_SAM\Security\Dependency_Integrity_Monitor;
+use WP_SAM\Security\Pinned_Dependency_Checker;
 use WP_SAM\Security\Information_Masking_Builder;
 use WP_SAM\Security\Internal_Script_Integrity_Builder;
 use WP_SAM\Security\Permissions_Policy_Builder;
@@ -340,6 +341,10 @@ final class Plugin {
 		// WP Cron: daily exception expiry check + upcoming-expiry
 		// notification (GitHub issue #177).
 		( new Exception_Scheduler() )->register();
+
+		// WP Cron: daily re-hash of each pinned third-party file, flagging
+		// a vendor-side change as drift for the administrator to review.
+		( new Pinned_Dependency_Checker( $this->audit ) )->register();
 
 		// ACME certificate automation: http-01 responder runs on every request
 		// (the CA's validation fetch is an anonymous front-end GET); the

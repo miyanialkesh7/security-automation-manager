@@ -431,7 +431,10 @@
 		$row.find( '.wp-sam-dependency-suggest-url, .wp-sam-dependency-suggest-button' ).prop( 'disabled', disabled );
 	}
 
-	function postDependencyClassification( $row ) {
+	// pinnedUrl: the exact URL Suggest just hashed, so the daily drift
+	// check re-fetches that file. Omitted for a typed hash -- the server
+	// then records the row's last-seen URL.
+	function postDependencyClassification( $row, pinnedUrl, onSaved ) {
 		const id             = $row.find( '.wp-sam-dependency-classification' ).data( 'id' );
 		const classification = $row.find( '.wp-sam-dependency-classification' ).val();
 		const expectedSri    = $row.find( '.wp-sam-dependency-sri' ).val();
@@ -442,8 +445,14 @@
 			id:              id,
 			classification:  classification,
 			expected_sri:    expectedSri,
+			pinned_url:      pinnedUrl || '',
 		} )
-		.done( reportAjaxFailure )
+		.done( function ( res ) {
+			reportAjaxFailure( res );
+			if ( res && true === res.success && onSaved ) {
+				onSaved();
+			}
+		} )
 		.fail( function () {
 			// eslint-disable-next-line no-alert
 			alert( 'Failed to save.' );
@@ -484,7 +493,7 @@
 		.done( function ( res ) {
 			if ( res.success && res.data && res.data.hash ) {
 				$row.find( '.wp-sam-dependency-sri' ).val( res.data.hash );
-				postDependencyClassification( $row );
+				postDependencyClassification( $row, res.data.url || url );
 			} else {
 				// eslint-disable-next-line no-alert
 				alert( ( res.data && res.data.message ) || 'Could not compute a hash for that URL.' );
@@ -497,6 +506,67 @@
 		.always( function () {
 			$button.prop( 'disabled', false ).text( originalLabel );
 		} );
+	} );
+
+	// Dependency Classification: a pinned file changed at its source.
+	// "Re-approve new hash" updates SAM's pinned value only; the page keeps
+	// showing the new hash (with Copy) because the integrity attribute in
+	// the theme/plugin markup still has to be changed by hand.
+	$( document ).on( 'click', '.wp-sam-dependency-reapprove', function () {
+		const $button = $( this );
+		const $row    = $button.closest( 'tr' );
+		const $banner = $button.closest( '.wp-sam-dependency-drift' );
+
+		$button.prop( 'disabled', true );
+
+		$.post( wpSamAdmin.ajaxUrl, {
+			action: 'wp_sam_reapprove_dependency_sri',
+			nonce:  wpSamAdmin.nonce,
+			id:     $button.data( 'id' ),
+		} )
+		.done( function ( res ) {
+			if ( res && res.success && res.data && res.data.hash ) {
+				$row.find( '.wp-sam-dependency-sri' ).val( res.data.hash );
+				$banner.find( '.wp-sam-dependency-drift-actions' ).remove();
+				$banner.find( '.wp-sam-dependency-drift-done' ).prop( 'hidden', false );
+			} else {
+				reportAjaxFailure( res );
+				$button.prop( 'disabled', false );
+			}
+		} )
+		.fail( function () {
+			// eslint-disable-next-line no-alert
+			alert( 'Failed to save.' );
+			$button.prop( 'disabled', false );
+		} );
+	} );
+
+	$( document ).on( 'click', '.wp-sam-dependency-allow-host', function () {
+		const $row = $( this ).closest( 'tr' );
+		$row.find( '.wp-sam-dependency-classification' ).val( 'mutable_provider' );
+		refreshSriInputState( $row );
+		postDependencyClassification( $row, '', function () {
+			$row.find( '.wp-sam-dependency-drift' ).remove();
+		} );
+	} );
+
+	$( document ).on( 'click', '.wp-sam-copy-value', function () {
+		const $button = $( this );
+		const value   = String( $button.data( 'value' ) || '' );
+		const done    = function () {
+			const original = $button.text();
+			$button.text( $button.data( 'copied-label' ) || 'Copied' );
+			setTimeout( function () { $button.text( original ); }, 1500 );
+		};
+		if ( navigator.clipboard && navigator.clipboard.writeText ) {
+			navigator.clipboard.writeText( value ).then( done, function () {
+				// eslint-disable-next-line no-alert
+				window.prompt( 'Copy this value:', value );
+			} );
+		} else {
+			// eslint-disable-next-line no-alert
+			window.prompt( 'Copy this value:', value );
+		}
 	} );
 
 	// Custom Rules tab: "Test a pattern" tool -- Traffic Controls -> Custom Rules.
@@ -568,4 +638,57 @@
 			} );
 		} );
 	} );
+
+	// Control → Traffic Controls → Network Intelligence → Geo-IP: "Select
+	// by group" on the Country Block List. A selection aid only -- it ticks
+	// or unticks the grid's own blocked_countries[] checkboxes and never
+	// submits anything; the existing Save button (and its server-side
+	// self-lockout check) is still the only way a change is applied.
+	( function () {
+		const $groups = $( '#wp-sam-country-groups' );
+		const $grid   = $( '#wp-sam-country-grid' );
+		if ( ! $groups.length || ! $grid.length ) {
+			return;
+		}
+
+		const $select  = $( '#wp-sam-country-group-select' );
+		const $buttons = $groups.find( '[data-wp-sam-country-group-action]' );
+		const $count   = $( '#wp-sam-country-count' );
+		const $boxes   = $grid.find( 'input[type="checkbox"][name="blocked_countries[]"]' );
+
+		function updateCount() {
+			$count.text( $boxes.filter( ':checked' ).length );
+		}
+
+		function showSelectedGroup() {
+			const key = $select.val();
+			$groups.find( '[data-wp-sam-country-group-details]' ).prop( 'hidden', true );
+			$buttons.prop( 'disabled', ! key );
+			if ( key ) {
+				$groups.find( '[data-wp-sam-country-group-details]' ).filter( function () {
+					return $( this ).attr( 'data-wp-sam-country-group-details' ) === key;
+				} ).prop( 'hidden', false );
+			}
+		}
+
+		$select.on( 'change', showSelectedGroup );
+
+		$buttons.on( 'click', function () {
+			const codes = String( $select.find( 'option:selected' ).attr( 'data-codes' ) || '' ).split( ' ' ).filter( Boolean );
+			if ( ! codes.length ) {
+				return;
+			}
+			const tick = 'tick' === $( this ).attr( 'data-wp-sam-country-group-action' );
+			$boxes.each( function () {
+				if ( -1 !== codes.indexOf( this.value ) ) {
+					this.checked = tick;
+				}
+			} );
+			updateCount();
+		} );
+
+		$boxes.on( 'change', updateCount );
+		showSelectedGroup();
+		updateCount();
+	}() );
 } )( jQuery );

@@ -4,6 +4,69 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows semantic versioning for plugin releases.
 
+## [2.12.0] - 2026-10-29
+
+### Fixed
+
+- **Admin CSP violation reports are no longer turned away by the report endpoint's flood guard.** `Violation_Reporter::check_not_flooding()` (2.9.79) allowed 40 reports per IP per 10 seconds, shared across every surface. Staff in wp-admin share an office IP with their own frontend browsing, and an admin page still being learned sends dozens of reports per load, so admin reports were the ones refused with a 429, without any record. Admin reports had also never arrived before 2.11.4, because until then the admin policy was never sent on wp-admin pages at all.
+  - `Reporting_Endpoint::url_for_surface()` adds a `surface` hint to the admin and login `report-uri` and `Reporting-Endpoints` URL. The frontend URL and any administrator-configured override URL are unchanged.
+  - The flood budget is per (IP, surface): frontend 40, admin 120, login 40. The hint only selects a bucket. The surface a report is stored under still comes from its own document URI.
+  - Each refusal is recorded in `Csp_Delivery_Log` (`last_throttled`). `csp_enforce_ready` won't treat a window with throttled reports as quiet.
+  - Observe → CSP Violations gets a per-surface summary. For each surface it shows distinct violations, last report, policy last sent, and whether reports were refused. Each surface links to its own filtered list.
+  - `Policy_Builder` sends headers through `send_header()`. `PolicyBuilderTest` asserts exactly what a wp-admin response carries: the report-only policy, `report-uri …/sam/v1/report?surface=admin`, `report-to csp-endpoint`, and the matching `Reporting-Endpoints` header.
+- **The traffic block ladder is fair to steady traffic, administrators and sources that have gone quiet** (#459). All three were behind production's own server showing as "Aggressive / rate-escalated".
+  - `Rate_Limiter::hit()` called `set_transient()` on every hit, pushing the expiry out each time, so a counter only reset after a full window with no requests at all. A slow, steady source (WP-Cron loopbacks, an uptime monitor, an office behind one address) never got that gap and eventually "exceeded" a per-minute limit it never reached in any single minute. The transient now stores `{start, count}` and expires when its window ends. A bare count left by the old format starts a fresh window. The CSP report flood check uses the same limiter.
+  - `Traffic_Guard::decide()` returns before the rate limiter for a privileged session, so an administrator's page loads no longer use up their address's allowance. `Request_Observer` logs an administrator's enforce-mode detector match as an event without recording a violation.
+  - `Traffic_Block_Store::effective_stage()` moves a source down one stage for each full hour without a violation after its last block ended, so `extended_block` clears after four quiet hours. `persistent_block` never decays. `record_violation()` and `Bot_Classifier` both use it.
+- **Learned hashes of JSON-LD and other JSON data blocks are retired automatically** (#461). 2.11.3 stopped new ones being hashed, but rows learned before it still counted against the header's hash budget (behind `hash_budget_exceeded`) and could push out hashes real inline scripts need. `Hash_Manager::retire_json_data_hashes()` runs on every daily and manual scan, just before the age prune, and retires active rows whose `source_context` opens with a JSON object key (`{"…":` or `[{"…":`). No working script can start that way. Rows are updated in chunks of 200, with one audit-log entry per run. No migration.
+- **The Geo-IP Country Block List shows every country without a sideways scroll** (#465). `.wp-sam-country-grid` had `columns: 220px 4` and `max-height: 420px`. A multi-column box with a fixed height adds overflow columns instead of scrolling, so most countries sat behind a horizontal scrollbar, and each of the four columns was about twice as wide as its names. It now uses as many `14em` columns as fit and grows downwards. Long names wrap with a hanging indent.
+- `Discovery::get_crawl_urls()` passed `'/'` to `get_home_url()` as the blog ID. It now calls `home_url( '/' )` (#462).
+- The GitHub-channel `update.json` reads `requires`, `tested` and `requires_php` from the packaged `readme.txt` instead of hard-coding them. `tested` had fallen behind at 7.0 (#462).
+- **The pinned-script check no longer compares another site's page** (#467). `Dependency_Integrity_Monitor::scan_surface()` fetched the home page with `wp_remote_get()`, which follows a redirect anywhere. An IP allow-list sending the server's own request elsewhere had it compare that page's markup with this site's pinned hashes, and nothing said so. It now uses `Same_Host_Fetcher`, and logs `scan_redirected_offsite` instead of comparing.
+- **SAM never records where its own requests were redirected** (#467). It knows this site's own address and nothing else, and a redirect often points at another copy of the same site.
+  - `Same_Host_Fetcher`'s `wp_sam_offsite_redirect` error says "Redirected away from this site (HTTP n)" and carries only the status code.
+  - Discovery's `crawl_redirected_offsite` line and the robots.txt, ads.txt, app-ads.txt, humans.txt, agents and security.txt checks no longer name the destination.
+  - Both redirect events show a plain-English admin notice. It explains that something outside SAM, usually an IP allow-list in .htaccess or the server configuration, is redirecting the request. It says to allow the single address the server uses to reach itself (shown in the access log under the `WP-CSP-Discovery` user agent), not a whole private range.
+  - Configuration export no longer writes the exporting site's URL into the file. Import never read it.
+- **Help text on Control → Traffic Controls uses the page's full width** (#464). The Policy, IP Rules and Blocks tabs capped their description paragraphs at `max-width:700px`, leaving a wide empty band beside them.
+
+### Added
+
+- **Sanctions lists for every authority, narrowed to where the site operates** (#466).
+  - `Country_Groups` adds sanctions groups for the UN Security Council, the EU, every country with a US OFAC program, Switzerland, Liechtenstein, Norway, Iceland, Canada, Australia, New Zealand, Japan, South Korea, Singapore, Taiwan and Ukraine. They were researched from official sources on 2026-10-28.
+  - Each lists every country its authority publishes a country regime for. Ukraine is never ticked. One-country trade bans, boycott laws and "unfriendly countries" lists are deliberately not offered.
+  - Each sanctions group's `applies_in` lists where its measures bind, including dependent territories (for example Jersey for the UK, Gibraltar for both the UK and the EU, and Puerto Rico for the US).
+  - A "Where does this website operate?" dropdown on the Geo-IP sub-tab (`Site_Country`, option `wp_sam_site_country`) narrows the sanctions groups to the UN list plus those that bind there. Other groups are never narrowed. Left unchosen, it offers every list, because sanctions also follow people and companies. Reset Data and uninstall clear the option.
+
+- **Control → Traffic Controls → IP Rules → This site's own addresses** (#460). `Own_Address_Store` holds up to 64 public addresses or CIDR ranges that a site's own servers or containers use to reach it. Ranges broader than /16 (IPv4) or /48 (IPv6) are rejected, and private addresses are already covered. Listed addresses get the same treatment as private ones in `Traffic_Guard`, `Traffic_Block_Store::record_violation()`, `Identity_Resolver` and `Campaign_Detector`: never rate-limited or escalated, never counted into a campaign, and shown as this site on Identities. An explicit Block rule still applies.
+  - The section suggests public addresses seen calling `/wp-cron.php` in the last 30 days, for the administrator to check. Nothing is added automatically, because an external cron service calls it too.
+  - Each save is audit-logged. Reset Data and uninstall clear the option. Configuration export leaves it out, because server addresses are specific to each site.
+
+- **Pinned script hash drift detection.** A new daily cron job, `Pinned_Dependency_Checker`, re-fetches each `immutable_pinned` file and compares it with the approved hash using the same algorithm.
+  - Each fetch is https only, same origin as the row, 5 MB cap, at most 25 files per run.
+  - The fetch helper `Dependency_Sri_Fetcher` is shared with Suggest, which now also rejects unsafe (private or loopback) URLs.
+  - A changed file raises a high-priority "Pinned script hash has drifted" recommendation and Action Centre item, an admin notice linking to Decide → Dependency Classification, and a failing Security Health dependencies row.
+  - A file that can't be fetched is shown as "couldn't check", never as drift.
+  - Schema v48 adds `pinned_url`, `integrity_checked_at`, `integrity_attempted_at`, `integrity_check_error`, `drift_detected_at` and `drift_observed_sri` to `sam_dependency_inventory`.
+- **One-click "Re-approve new hash" or "Allow by host instead"** on a drifted row. The banner shows the pinned and now-served hashes with a Copy button, because the `integrity` attribute in the theme or plugin markup must be updated too.
+- **Known-vendor profiles** (`Known_Vendor_Profiles`, filter `wp_sam_known_vendor_profiles`) for Google Tag Manager, Google Analytics, HubSpot, Cloudflare Turnstile and reCAPTCHA (matched by host and `/recaptcha/` path). Each is shown as "allowed by host, not hash", with the reason. Nothing is reclassified automatically.
+- **Country groups on the Geo-IP Country Block List** (Control → Traffic Controls → Network Intelligence → Geo-IP). New `Country_Groups` is a bundled table of:
+  - UN M49 regions, sub-regions and intermediate regions;
+  - the EU (27) and EEA (30);
+  - sanctions snapshots: UK country-specific regimes, and US OFAC comprehensive sanctions (CU, IR, KP).
+
+  Each group has its source and as-of date. The two sanctions lists were re-checked on 2026-10-28: the UK list against GOV.UK's regimes listed by country, and the OFAC list against OFAC FAQ 10, which is now its cited source because the programs page doesn't say which programs are comprehensive. The other groups are as of 2026-10-27. Ticking a group expands into the individual country checkboxes, which stay editable, and nothing is saved until Save.
+
+### Changed
+
+- **Settings opens on a summary-only Overview** (scorecard, recent activity, Protection Status, Action Centre). The Layer 1–5 tables have moved, unchanged, to a new Settings → All tab. Getting Started, Control → "Every header & content policy", the docs and `CLAUDE.md`'s route table now point there.
+- **The Settings → All layer tables share one column layout** (`.wp-sam-layer-table`: fixed layout, Area 26% / Status 52% / Manage 22%). Before, each of the five tables sized its own columns from its content, so they never lined up, and Layer 2 and 4's per-surface badges were held on one line by `nowrap`. Badges now wrap with even spacing, and below 782px the tables fall back to auto layout.
+- The Dependency Classification notice no longer claims hashes are never computed by fetching the remote URL.
+- `readme.txt`'s External services section now discloses the daily pinned-file check.
+- `docs/security-controls-inventory.md` and `docs/operating-model.html` no longer describe api as a CSP surface, which it hasn't been since 2.11.4 (#462).
+- **wp-admin lists the plugin as "Security Automation Manager"** (#463). Only the main file's `Plugin Name` header changed. The WordPress.org directory title (`readme.txt`'s `=== … ===` line), the slug and the text domain stay as they were, and `VersionConsistencyTest` pins both names.
+- The Geo-IP help text and two code comments say "never a shared credential" rather than "never a shared VCNS credential" (#464).
+
 ## [2.11.6] - 2026-10-27
 
 ### Fixed
@@ -695,7 +758,7 @@ Part A of a 4-part remediation; loopback-scan concurrency/timeouts, scan diagnos
 
 ### Added
 
-- Phase 4A of `.roadmap/phase4_plan.md`, third and final increment (Geo-IP Controls, `.roadmap/phase3_early_plan.md` §13.4): `includes/intelligence/class-geo-ip-store.php` resolves a source IP's country/region/city via IPinfo's API, entirely opt-in and bring-your-own-credentials -- disabled until an administrator enters their own IPinfo token, sealed with `Certificates\Credential_Vault` (the existing encryption-at-rest mechanism already protecting certificate and DNS-provider secrets), never a shared VCNS credential. Results cached in the new `sam_geoip_cache` table (30-day TTL, including a cached negative result on failure).
+- Phase 4A of `.roadmap/phase4_plan.md`, third and final increment (Geo-IP Controls, `.roadmap/phase3_early_plan.md` §13.4): `includes/intelligence/class-geo-ip-store.php` resolves a source IP's country/region/city via IPinfo's API, entirely opt-in and bring-your-own-credentials -- disabled until an administrator enters their own IPinfo token, sealed with `Certificates\Credential_Vault` (the existing encryption-at-rest mechanism already protecting certificate and DNS-provider secrets), never a shared credential. Results cached in the new `sam_geoip_cache` table (30-day TTL, including a cached negative result on failure).
 - MaxMind support explicitly deferred: its free GeoLite2 tier is a downloaded binary database, not a live API, and reading it correctly needs either a hand-rolled MMDB parser or this plugin's first-ever production Composer dependency (`geoip2/geoip2`) -- a real architectural decision, confirmed deferred rather than built silently either way.
 - `includes/intelligence/class-network-intelligence-resolver.php`: extended with the new collaborator; `geo_country`/`geo_region`/`geo_city` now attached alongside `is_tor_exit`/`asn`/`asn_org` on any Finding's evidence, same lazy-resolution pattern. `Geo_Ip_Store::resolve()` is a complete no-op (no DB query, no network call) until Geo-IP is configured.
 - `includes/admin/views/page-traffic.php`: Network Intelligence tab gains a Geo-IP settings section (token entry/clear, decrypt-failure warning) and its own "Look Up" tool.

@@ -71,7 +71,10 @@ class DiscoveryTest extends TestCase {
 			->with(
 				'discovery',
 				'crawl_redirected_offsite',
-				$this->logicalAnd( $this->stringContains( 'https://example.com/' ), $this->stringContains( 'production.example.org' ) ),
+				$this->logicalAnd(
+					$this->stringContains( 'https://example.com/ redirected away from this site (HTTP 301)' ),
+					$this->logicalNot( $this->stringContains( 'production.example.org' ) )
+				),
 				'warning'
 			);
 
@@ -136,7 +139,7 @@ class DiscoveryTest extends TestCase {
 			$this->assertStringNotContainsString( '/wp-json', $url );
 		}
 		$this->assertSame(
-			[ [ 'https://example.com', 'frontend' ], [ 'https://example.com/wp-login.php', 'login' ] ],
+			[ [ 'https://example.com/', 'frontend' ], [ 'https://example.com/wp-login.php', 'login' ] ],
 			$discovery->crawled
 		);
 	}

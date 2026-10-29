@@ -24,6 +24,7 @@ use WP_SAM\Intelligence\Ads_Txt_Store;
 use WP_SAM\Intelligence\Agents_Rules_Store;
 use WP_SAM\Intelligence\App_Ads_Txt_Store;
 use WP_SAM\Intelligence\Asn_Lookup_Store;
+use WP_SAM\Intelligence\Country_Groups;
 use WP_SAM\Intelligence\Custom_Rule_Store;
 use WP_SAM\Intelligence\Detector_Policy_Store;
 use WP_SAM\Intelligence\Detector_Registry;
@@ -33,8 +34,11 @@ use WP_SAM\Intelligence\Humans_Txt_Store;
 use WP_SAM\Intelligence\Ip_Rule_Store;
 use WP_SAM\Intelligence\Iso_Countries;
 use WP_SAM\Intelligence\Network_Rule_Store;
+use WP_SAM\Intelligence\Own_Address_Store;
 use WP_SAM\Intelligence\Robots_Rules_Store;
+use WP_SAM\Intelligence\Scanner_Identity_Store;
 use WP_SAM\Intelligence\Security_Txt_Store;
+use WP_SAM\Intelligence\Site_Country;
 use WP_SAM\Intelligence\Tor_Exit_List_Store;
 use WP_SAM\Intelligence\Traffic_Block_Store;
 use WP_SAM\Intelligence\Traffic_Policy_Store;
@@ -100,8 +104,8 @@ $tab_help = array(
 
 		<?php $policies = ( new Traffic_Policy_Store() )->all(); ?>
 
-		<p class="description" style="max-width:700px">
-			<?php esc_html_e( "Each surface below -- frontend, admin, login, and the REST API -- gets its own rate limit, because what counts as normal traffic on one is an attack on another: a handful of requests a minute is unremarkable on the frontend but alarming against the login form. In Observe mode, crossing that limit is only ever recorded, never enforced. In Enforce mode, a source that crosses it climbs a progressive ladder instead -- warned, then throttled, then temporarily blocked, then blocked for longer -- visible per-source on the Blocks tab, so one burst of ordinary traffic isn't treated the same as a sustained attack. Login also gets a failed-attempt lockout, since brute-forcing a password is a pattern rate limiting alone doesn't fully capture.", 'vcns-security-automation-manager' ); ?>
+		<p class="description">
+			<?php esc_html_e( "Each surface below -- frontend, admin, login, and the REST API -- gets its own rate limit, because what counts as normal traffic on one is an attack on another: a handful of requests a minute is unremarkable on the frontend but alarming against the login form. In Observe mode, crossing that limit is only ever recorded, never enforced. In Enforce mode, a source that crosses it climbs a progressive ladder instead -- warned, then throttled, then temporarily blocked, then blocked for longer -- visible per-source on the Blocks tab, so one burst of ordinary traffic isn't treated the same as a sustained attack. Each quiet hour after that steps the source back down one stage, and a logged-in administrator's own requests never count towards the limit. Login also gets a failed-attempt lockout, since brute-forcing a password is a pattern rate limiting alone doesn't fully capture.", 'vcns-security-automation-manager' ); ?>
 		</p>
 
 		<?php foreach ( $policies as $policy ) : ?>
@@ -165,7 +169,7 @@ $tab_help = array(
 
 		<?php $rules = ( new Ip_Rule_Store() )->all(); ?>
 
-		<p class="description" style="max-width:700px">
+		<p class="description">
 			<?php esc_html_e( 'Use this when you already know a specific address and want a decision that doesn\'t depend on rate limits or detectors at all: Allow permanently exempts a source you trust (a monitoring service, your own office) from every other control on this page; Block permanently shuts one out, regardless of what mode a surface is in. A CIDR range lets one rule cover a whole block of addresses at once -- 203.0.113.0/24 covers all 256 addresses from .0 to .255, useful when an attacker is rotating through a known range. Leave Expires blank (or 0) for a rule that should never lapse on its own; for the equivalent decision by ASN or country instead of by address, see Network Rules on the Network Intelligence tab.', 'vcns-security-automation-manager' ); ?>
 		</p>
 
@@ -249,12 +253,57 @@ $tab_help = array(
 			<?php submit_button( __( 'Add rule', 'vcns-security-automation-manager' ) ); ?>
 		</form>
 
+		<?php
+		$own_addresses = Own_Address_Store::all();
+		$own_rejected  = get_transient( 'wp_sam_own_addresses_rejected_' . get_current_user_id() );
+		if ( false !== $own_rejected ) {
+			delete_transient( 'wp_sam_own_addresses_rejected_' . get_current_user_id() );
+		}
+		$own_suggested = array_values( array_diff( ( new Scanner_Identity_Store() )->recent_wp_cron_callers(), $own_addresses ) );
+		?>
+		<h2 id="wp-sam-own-addresses" style="margin-top:2em"><?php esc_html_e( 'This site\'s own addresses', 'vcns-security-automation-manager' ); ?></h2>
+		<p class="description">
+			<?php esc_html_e( 'If this site\'s own servers or containers reach it through a public IP address, list those addresses here. They are then treated like a private address: never rate-limited or blocked automatically, never counted into a campaign, and shown on Observe → Continuous Intelligence → Identities as this site\'s own. An Allow rule above only stops this page blocking an address; an address listed here also stops showing up as escalating. A Block rule above still applies. Private and loopback addresses (10.x, 172.16-31.x, 192.168.x, 127.x and the IPv6 equivalents) are already covered and don\'t need listing.', 'vcns-security-automation-manager' ); ?>
+		</p>
+		<?php if ( is_array( $own_rejected ) && ! empty( $own_rejected ) ) : ?>
+		<div class="notice notice-warning inline">
+			<p><?php esc_html_e( 'These entries were not saved:', 'vcns-security-automation-manager' ); ?></p>
+			<ul>
+				<?php foreach ( $own_rejected as $rejected ) : ?>
+				<li><code><?php echo esc_html( (string) ( $rejected['entry'] ?? '' ) ); ?></code> -- <?php echo esc_html( (string) ( $rejected['reason'] ?? '' ) ); ?></li>
+				<?php endforeach; ?>
+			</ul>
+		</div>
+		<?php elseif ( isset( $_GET['own_saved'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display-only flag set by our own redirect. ?>
+		<div class="notice notice-success inline"><p><?php esc_html_e( 'Saved.', 'vcns-security-automation-manager' ); ?></p></div>
+		<?php endif; ?>
+		<?php if ( ! empty( $own_suggested ) ) : ?>
+		<p class="description">
+			<?php
+			printf(
+				/* translators: %s: comma-separated IP addresses. */
+				esc_html__( 'Seen calling /wp-cron.php in the last 30 days: %s. WordPress normally only calls that on itself, so these are probably this site\'s own servers. Check each one before adding it: an external cron service calls it too.', 'vcns-security-automation-manager' ),
+				'<code>' . implode( '</code>, <code>', array_map( 'esc_html', $own_suggested ) ) . '</code>' // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- each address is escaped with esc_html().
+			);
+			?>
+		</p>
+		<?php endif; ?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<?php wp_nonce_field( 'wp_sam_own_addresses_save' ); ?>
+			<input type="hidden" name="action" value="wp_sam_own_addresses_save" />
+			<p>
+				<label for="own_addresses"><?php esc_html_e( 'One IP address or CIDR range per line', 'vcns-security-automation-manager' ); ?></label><br />
+				<textarea id="own_addresses" name="own_addresses" rows="4" style="width:100%;max-width:300px" placeholder="203.0.113.10&#10;203.0.113.32/28"><?php echo esc_textarea( implode( "\n", $own_addresses ) ); ?></textarea>
+			</p>
+			<?php submit_button( __( 'Save own addresses', 'vcns-security-automation-manager' ) ); ?>
+		</form>
+
 	<?php elseif ( 'blocks' === $tab ) : ?>
 
 		<?php $blocks = ( new Traffic_Block_Store() )->all_active(); ?>
 
-		<p class="description" style="max-width:700px">
-			<?php esc_html_e( "This is what automatic detection has done on its own, without you adding anything here -- crossing a rate limit or tripping an enforce-mode detector moves a source up a stage (Warn, Throttle, Temporary block, Extended block); Occurrences counts how many times that's happened. Release lifts a block immediately, useful when you recognise a source as a false positive; Make Permanent turns a temporary, auto-expiring block into one that stays until you remove it yourself -- functionally the same outcome as adding it to IP Rules by hand. Nothing here is a manual decision until you click one of those two buttons.", 'vcns-security-automation-manager' ); ?>
+		<p class="description">
+			<?php esc_html_e( "This is what automatic detection has done on its own, without you adding anything here -- crossing a rate limit or tripping an enforce-mode detector moves a source up a stage (Warn, Throttle, Temporary block, Extended block), and every hour without a new violation, once any block has ended, moves it back down one; Occurrences counts how many times that's happened. Release lifts a block immediately, useful when you recognise a source as a false positive; Make Permanent turns a temporary, auto-expiring block into one that stays until you remove it yourself -- functionally the same outcome as adding it to IP Rules by hand. Nothing here is a manual decision until you click one of those two buttons.", 'vcns-security-automation-manager' ); ?>
 		</p>
 
 		<div class="wp-sam-table-wrap">
@@ -434,7 +483,7 @@ $tab_help = array(
 			<?php $geo_store = new Geo_Ip_Store(); ?>
 
 			<p class="description">
-				<?php esc_html_e( 'Opt-in, using your own IPinfo (ipinfo.io) account -- never a shared VCNS credential. Disabled until you add a token below. MaxMind support is a deliberate later decision, not built yet -- its free tier is a downloaded database, not a live lookup service.', 'vcns-security-automation-manager' ); ?>
+				<?php esc_html_e( 'Opt-in, using your own IPinfo (ipinfo.io) account -- never a shared credential. Disabled until you add a token below. MaxMind support is a deliberate later decision, not built yet -- its free tier is a downloaded database, not a live lookup service.', 'vcns-security-automation-manager' ); ?>
 				<?php if ( ! $geo_store->is_configured() ) : ?>
 				<a href="https://ipinfo.io/signup" target="_blank" rel="noopener noreferrer"><?php esc_html_e( "Don't have a token? Sign up free at ipinfo.io.", 'vcns-security-automation-manager' ); ?></a>
 				<?php endif; ?>
@@ -537,6 +586,28 @@ $tab_help = array(
 				<?php esc_html_e( 'Every country defaults to Allow. Tick a country to Block it -- nothing changes until you click Save below.', 'vcns-security-automation-manager' ); ?>
 			</p>
 
+			<?php
+			// A separate form, because "Select by group" below sits inside the
+			// Country Block List's own form. Saving this only changes which
+			// sanctions lists that control offers -- see Site_Country.
+			$geoip_site_country = Site_Country::get();
+			?>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" id="wp-sam-site-country" style="margin-top:1em">
+				<?php wp_nonce_field( 'wp_sam_site_country_save' ); ?>
+				<input type="hidden" name="action" value="wp_sam_site_country_save" />
+				<label for="wp-sam-site-country-select"><strong><?php esc_html_e( 'Where does this website operate?', 'vcns-security-automation-manager' ); ?></strong></label>
+				<select id="wp-sam-site-country-select" name="site_country" aria-describedby="wp-sam-site-country-help">
+					<option value=""><?php esc_html_e( '— Not chosen: offer every sanctions list —', 'vcns-security-automation-manager' ); ?></option>
+					<?php foreach ( Iso_Countries::all() as $code => $name ) : ?>
+					<option value="<?php echo esc_attr( $code ); ?>"<?php selected( $geoip_site_country, $code ); ?>><?php echo esc_html( $name ); ?></option>
+					<?php endforeach; ?>
+				</select>
+				<?php submit_button( __( 'Save', 'vcns-security-automation-manager' ), 'secondary', 'submit', false ); ?>
+				<p class="description" id="wp-sam-site-country-help">
+					<?php esc_html_e( 'Narrows the sanctions lists offered under "Select by group" to the UN list and the lists that bind in that country -- the EU\'s for France, the UK\'s for Jersey. It never blocks anything itself. Sanctions also follow people and companies, not only places: a site run by a US company, or by a UK national living abroad, may be bound by their own country\'s lists as well, so leave this unchosen to see every list.', 'vcns-security-automation-manager' ); ?>
+				</p>
+			</form>
+
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:1em">
 				<?php wp_nonce_field( 'wp_sam_geoip_country_block_save' ); ?>
 				<input type="hidden" name="action" value="wp_sam_geoip_country_block_save" />
@@ -551,8 +622,93 @@ $tab_help = array(
 					</p>
 				</div>
 				<?php endif; ?>
-				<div class="wp-sam-country-grid">
-					<?php foreach ( Iso_Countries::all() as $code => $name ) : ?>
+				<?php
+				// Selection aid only: the group <select> has no name, so it is
+				// never posted -- assets/js/admin.js just ticks/unticks the
+				// grid's own checkboxes, and blocked_countries[] stays the only
+				// thing handle_geoip_country_block_save() ever sees.
+				$geoip_country_names    = Iso_Countries::all();
+				$geoip_ticked_count     = count( array_intersect( array_keys( $geoip_country_names ), $geoip_checked_codes ) );
+				$geoip_group_categories = Country_Groups::by_category( $geoip_site_country );
+				?>
+				<div class="wp-sam-country-groups" id="wp-sam-country-groups">
+					<h4 style="margin:0 0 .5em"><?php esc_html_e( 'Select by group', 'vcns-security-automation-manager' ); ?></h4>
+					<p class="description" style="margin-top:0">
+						<?php esc_html_e( 'A shortcut for ticking many countries at once. Choosing a group only ticks or unticks its countries in the list below -- every country stays individually editable, and nothing is blocked until you click Save. Group lists are bundled with SAM as a snapshot (each shows its source and as-of date) and are never updated automatically.', 'vcns-security-automation-manager' ); ?>
+					</p>
+					<?php if ( '' !== $geoip_site_country ) : ?>
+					<p class="description">
+						<?php
+						/* translators: %s: country name, e.g. "France". */
+						echo esc_html( sprintf( __( 'Sanctions lists are narrowed to those that bind in %s. Change "Where does this website operate?" above to see others.', 'vcns-security-automation-manager' ), $geoip_country_names[ $geoip_site_country ] ) );
+						?>
+					</p>
+					<?php endif; ?>
+					<label for="wp-sam-country-group-select"><?php esc_html_e( 'Group', 'vcns-security-automation-manager' ); ?></label>
+					<select id="wp-sam-country-group-select" aria-describedby="wp-sam-country-group-details">
+						<option value=""><?php esc_html_e( '— Choose a group —', 'vcns-security-automation-manager' ); ?></option>
+						<?php foreach ( $geoip_group_categories as $geoip_category ) : ?>
+						<optgroup label="<?php echo esc_attr( $geoip_category['label'] ); ?>">
+							<?php foreach ( $geoip_category['groups'] as $geoip_group_key => $geoip_group ) : ?>
+							<option value="<?php echo esc_attr( $geoip_group_key ); ?>" data-codes="<?php echo esc_attr( implode( ' ', $geoip_group['codes'] ) ); ?>">
+								<?php
+								/* translators: 1: group name, e.g. "Northern Europe"; 2: number of countries in it. */
+								echo esc_html( sprintf( __( '%1$s (%2$d)', 'vcns-security-automation-manager' ), $geoip_group['label'], count( $geoip_group['codes'] ) ) );
+								?>
+							</option>
+							<?php endforeach; ?>
+						</optgroup>
+						<?php endforeach; ?>
+					</select>
+					<button type="button" class="button" data-wp-sam-country-group-action="tick" disabled><?php esc_html_e( 'Tick all in group', 'vcns-security-automation-manager' ); ?></button>
+					<button type="button" class="button" data-wp-sam-country-group-action="untick" disabled><?php esc_html_e( 'Untick all in group', 'vcns-security-automation-manager' ); ?></button>
+
+					<div id="wp-sam-country-group-details" class="wp-sam-country-group-details" aria-live="polite">
+						<?php foreach ( $geoip_group_categories as $geoip_category_key => $geoip_category ) : ?>
+							<?php foreach ( $geoip_category['groups'] as $geoip_group_key => $geoip_group ) : ?>
+						<div data-wp-sam-country-group-details="<?php echo esc_attr( $geoip_group_key ); ?>" hidden>
+							<p>
+								<strong><?php echo esc_html( $geoip_group['label'] ); ?></strong>
+								&middot;
+								<?php
+								/* translators: %s: date the group list was last checked, YYYY-MM-DD. */
+								echo esc_html( sprintf( __( 'As of %s', 'vcns-security-automation-manager' ), $geoip_group['as_of'] ) );
+								?>
+								&middot;
+								<?php esc_html_e( 'Source:', 'vcns-security-automation-manager' ); ?>
+								<a href="<?php echo esc_url( $geoip_group['source_url'] ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( $geoip_group['source'] ); ?></a>
+							</p>
+								<?php if ( '' !== $geoip_group['note'] ) : ?>
+							<p><?php echo esc_html( $geoip_group['note'] ); ?></p>
+							<?php endif; ?>
+								<?php if ( 'sanctions' === $geoip_category_key ) : ?>
+							<p><em><?php esc_html_e( 'This is a snapshot taken on the as-of date and SAM does not update it automatically -- check the source for the current list. Sanctions regimes target named persons, entities and sectors; being on this list is not in itself a requirement to block all traffic from a country. Whether to block is your decision.', 'vcns-security-automation-manager' ); ?></em></p>
+							<?php endif; ?>
+							<p>
+								<?php
+								echo esc_html(
+									implode(
+										', ',
+										array_map(
+											static fn( $geoip_code ) => ( $geoip_country_names[ $geoip_code ] ?? $geoip_code ) . ' (' . $geoip_code . ')',
+											$geoip_group['codes']
+										)
+									)
+								);
+								?>
+							</p>
+						</div>
+							<?php endforeach; ?>
+						<?php endforeach; ?>
+					</div>
+
+					<p class="wp-sam-country-count">
+						<?php esc_html_e( 'Countries ticked:', 'vcns-security-automation-manager' ); ?>
+						<strong id="wp-sam-country-count" aria-live="polite"><?php echo esc_html( (string) $geoip_ticked_count ); ?></strong>
+					</p>
+				</div>
+				<div class="wp-sam-country-grid" id="wp-sam-country-grid">
+					<?php foreach ( $geoip_country_names as $code => $name ) : ?>
 					<label>
 						<input type="checkbox" name="blocked_countries[]" value="<?php echo esc_attr( $code ); ?>" <?php checked( in_array( $code, $geoip_checked_codes, true ) ); ?> />
 						<?php echo esc_html( $name ); ?> <code><?php echo esc_html( $code ); ?></code>

@@ -348,12 +348,23 @@ class Policy_Builder extends Header_Builder {
 		// Declare the Reporting API endpoint only when explicitly enabled. The default
 		// direct report-uri path is intentionally quicker and easier to observe.
 		if ( $this->uses_reporting_api() ) {
-			Reporting_Endpoint::emit_headers();
+			foreach ( Reporting_Endpoint::header_lines( $surface ) as $line ) {
+				$this->send_header( $line );
+			}
 		}
 
-		header( $header_name . ': ' . $policy );
+		$this->send_header( $header_name . ': ' . $policy );
 		Csp_Delivery_Log::record_sent( $surface );
 		return true;
+	}
+
+	/**
+	 * The one place this class calls header(). header() output can't be
+	 * observed from the CLI SAPI PHPUnit runs under, so tests override
+	 * this to capture exactly what a request would have been sent.
+	 */
+	protected function send_header( string $line ): void {
+		header( $line );
 	}
 
 	public function get_policy_header_name( bool $is_report_only ): string {
@@ -647,7 +658,7 @@ class Policy_Builder extends Header_Builder {
 		// browsers ignore report-uri when report-to is present, which delays learning.
 		$reporting_transport = $this->get_reporting_transport();
 		if ( self::REPORTING_TRANSPORT_API !== $reporting_transport ) {
-			$directives['report-uri'] = array( Reporting_Endpoint::url() );
+			$directives['report-uri'] = array( Reporting_Endpoint::url_for_surface( $surface ) );
 		}
 		if ( in_array( $reporting_transport, array( self::REPORTING_TRANSPORT_API, self::REPORTING_TRANSPORT_BOTH ), true ) ) {
 			$directives['report-to'] = array( Reporting_Endpoint::GROUP_NAME );

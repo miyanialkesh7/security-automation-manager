@@ -215,6 +215,62 @@ class PageTrafficTest extends TestCase {
 
 	// ── Network Intelligence tab -- Geo-IP sub-tab's Country Block List ─────
 
+	/**
+	 * The grid has to grow downwards. A height cap on a multi-column box
+	 * adds overflow columns to the right instead of scrolling, and with a
+	 * 4-column cap as well it hid most countries behind a horizontal
+	 * scrollbar and left a wide empty band in every column.
+	 */
+	public function test_country_grid_css_has_no_height_or_column_count_cap(): void {
+		$css = (string) file_get_contents( WP_SAM_DIR . 'assets/css/admin.css' );
+
+		$this->assertSame( 1, preg_match( '/^\.wp-sam-country-grid \{([^}]*)\}/m', $css, $rule ) );
+		$this->assertStringContainsString( 'column-width', $rule[1] );
+		$this->assertStringNotContainsString( 'max-height', $rule[1] );
+		$this->assertStringNotContainsString( 'column-count', $rule[1] );
+		$this->assertDoesNotMatchRegularExpression( '/\bcolumns:/', $rule[1] );
+	}
+
+	private function render_geoip_subtab(): string {
+		$_GET['tab']                  = 'network-intelligence';
+		$_GET['subtab']               = 'geoip';
+		$GLOBALS['_wpdb_get_results'] = array();
+
+		ob_start();
+		require WP_SAM_DIR . 'includes/admin/views/page-traffic.php';
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['tab'], $_GET['subtab'] );
+		return $output;
+	}
+
+	public function test_geoip_subtab_offers_every_sanctions_list_until_a_site_country_is_chosen(): void {
+		$output = $this->render_geoip_subtab();
+
+		$this->assertStringContainsString( 'Where does this website operate?', $output );
+		$this->assertStringContainsString( 'name="action" value="wp_sam_site_country_save"', $output );
+		$this->assertStringContainsString( '<select id="wp-sam-site-country-select" name="site_country"', $output );
+		$this->assertStringContainsString( 'Not chosen: offer every sanctions list', $output );
+		foreach ( array( 'un-sanctions', 'eu-sanctions', 'uk-sanctions', 'us-ofac-comprehensive', 'jp-sanctions' ) as $key ) {
+			$this->assertStringContainsString( 'value="' . $key . '"', $output );
+		}
+		$this->assertStringNotContainsString( 'narrowed to those that bind', $output );
+	}
+
+	public function test_geoip_subtab_narrows_the_sanctions_lists_to_the_site_country(): void {
+		update_option( 'wp_sam_site_country', 'FR' );
+
+		$output = $this->render_geoip_subtab();
+
+		$this->assertStringContainsString( "value=\"FR\" selected='selected'", $output );
+		$this->assertStringContainsString( 'value="un-sanctions"', $output );
+		$this->assertStringContainsString( 'value="eu-sanctions"', $output );
+		$this->assertStringNotContainsString( 'value="uk-sanctions"', $output );
+		$this->assertStringNotContainsString( 'data-wp-sam-country-group-details="uk-sanctions"', $output );
+		$this->assertStringContainsString( 'value="eu"', $output, 'Blocs and regions are never narrowed.' );
+		$this->assertStringContainsString( 'Sanctions lists are narrowed to those that bind in France.', $output );
+	}
+
 	public function test_geoip_subtab_renders_country_grid_with_nothing_blocked(): void {
 		$_GET['tab']    = 'network-intelligence';
 		$_GET['subtab'] = 'geoip';
@@ -252,6 +308,34 @@ class PageTrafficTest extends TestCase {
 		unset( $_GET['tab'], $_GET['subtab'] );
 
 		$this->assertMatchesRegularExpression( '/value="CN"\s+checked/', $output );
+		$this->assertMatchesRegularExpression( '/id="wp-sam-country-count"[^>]*>1</', $output );
+	}
+
+	public function test_geoip_subtab_renders_the_select_by_group_control_without_posting_it(): void {
+		$_GET['tab']    = 'network-intelligence';
+		$_GET['subtab'] = 'geoip';
+		$GLOBALS['_wpdb_get_results'] = array();
+
+		ob_start();
+		require WP_SAM_DIR . 'includes/admin/views/page-traffic.php';
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['tab'], $_GET['subtab'] );
+
+		$this->assertStringContainsString( 'Select by group', $output );
+		$this->assertStringContainsString( '<label for="wp-sam-country-group-select">', $output );
+		// No name attribute: the group choice is never submitted.
+		$this->assertStringContainsString( '<select id="wp-sam-country-group-select" aria-describedby="wp-sam-country-group-details">', $output );
+		$this->assertStringContainsString( '<optgroup label="Continents (UN M49 regions)">', $output );
+		$this->assertStringContainsString( '<optgroup label="Sanctions (snapshot)">', $output );
+		$this->assertStringContainsString( 'value="eu" data-codes="AT BE BG', $output );
+		$this->assertStringContainsString( 'Tick all in group', $output );
+		$this->assertStringContainsString( 'Untick all in group', $output );
+		$this->assertStringContainsString( 'data-wp-sam-country-group-details="uk-sanctions" hidden', $output );
+		$this->assertStringContainsString( 'not in itself a requirement to block all traffic', $output );
+		$this->assertStringContainsString( 'never updated automatically', $output );
+		$this->assertMatchesRegularExpression( '/id="wp-sam-country-count"[^>]*>0</', $output );
+		$this->assertStringContainsString( 'id="wp-sam-country-grid"', $output );
 	}
 
 	public function test_geoip_subtab_shows_the_lockout_warning_from_a_pending_transient(): void {
@@ -384,5 +468,89 @@ class PageTrafficTest extends TestCase {
 		$this->assertStringContainsString( 'resolves to China', $output );
 		$this->assertStringContainsString( 'confirm_lockout_risk', $output );
 		$this->assertStringContainsString( 'value="CN"', $output );
+	}
+
+	public function test_ip_rules_tab_shows_the_own_addresses_form_with_saved_entries(): void {
+		$_GET['tab'] = 'ip-rules';
+		\WP_SAM\Intelligence\Own_Address_Store::save( "185.199.223.7\n203.0.113.32/28" );
+		$GLOBALS['_wpdb_get_results'] = array();
+		$GLOBALS['_wpdb_get_col']     = array();
+
+		ob_start();
+		require WP_SAM_DIR . 'includes/admin/views/page-traffic.php';
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['tab'] );
+
+		$this->assertStringContainsString( 'id="wp-sam-own-addresses"', $output );
+		$this->assertStringContainsString( 'wp_sam_own_addresses_save', $output );
+		$this->assertStringContainsString( "185.199.223.7\n203.0.113.32/28</textarea>", $output );
+		$this->assertStringNotContainsString( 'Seen calling /wp-cron.php', $output );
+	}
+
+	public function test_ip_rules_tab_suggests_wp_cron_callers_not_yet_listed(): void {
+		$_GET['tab'] = 'ip-rules';
+		\WP_SAM\Intelligence\Own_Address_Store::save( '185.177.72.38' );
+		$GLOBALS['_wpdb_get_results'] = array();
+		$GLOBALS['_wpdb_get_col']     = array( '185.199.223.7', '185.177.72.38' );
+
+		ob_start();
+		require WP_SAM_DIR . 'includes/admin/views/page-traffic.php';
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['tab'] );
+
+		$this->assertStringContainsString( 'Seen calling /wp-cron.php in the last 30 days: <code>185.199.223.7</code>.', $output );
+	}
+
+	public function test_ip_rules_tab_lists_entries_that_were_not_saved_once(): void {
+		$_GET['tab'] = 'ip-rules';
+		$GLOBALS['_wpdb_get_results'] = array();
+		$GLOBALS['_wpdb_get_col']     = array();
+		set_transient(
+			'wp_sam_own_addresses_rejected_' . get_current_user_id(),
+			array( array( 'entry' => '0.0.0.0/0', 'reason' => 'Too broad: the widest range accepted is /16.' ) )
+		);
+
+		ob_start();
+		require WP_SAM_DIR . 'includes/admin/views/page-traffic.php';
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['tab'] );
+
+		$this->assertStringContainsString( '<code>0.0.0.0/0</code> -- Too broad', $output );
+		$this->assertFalse( get_transient( 'wp_sam_own_addresses_rejected_' . get_current_user_id() ) );
+	}
+
+	/**
+	 * Help text spans the page's width on every tab, as it already did on
+	 * Network Intelligence. A max-width:700px on the Policy, IP Rules and
+	 * Blocks paragraphs left a wide empty band beside them.
+	 *
+	 * @dataProvider tab_provider
+	 */
+	public function test_help_text_is_not_width_capped( string $tab ): void {
+		$_GET['tab']                  = $tab;
+		$GLOBALS['_wpdb_get_results'] = array();
+
+		ob_start();
+		require WP_SAM_DIR . 'includes/admin/views/page-traffic.php';
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['tab'] );
+
+		$this->assertStringContainsString( '<p class="description"', $output );
+		$this->assertDoesNotMatchRegularExpression( '/<p class="description"[^>]*max-width/', $output );
+	}
+
+	public static function tab_provider(): array {
+		return array(
+			'policy'               => array( 'policy' ),
+			'ip-rules'             => array( 'ip-rules' ),
+			'blocks'               => array( 'blocks' ),
+			'network-intelligence' => array( 'network-intelligence' ),
+			'detectors'            => array( 'detectors' ),
+			'custom-rules'         => array( 'custom-rules' ),
+		);
 	}
 }
