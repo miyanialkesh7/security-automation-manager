@@ -12,6 +12,8 @@
  *     check_not_flooding() wired in as this route's own permission_callback
  *     (see its own docblock) -- the storage cap above only ever gated what
  *     got written to the database, not the cost of accepting the request.
+ *     That budget is per (IP, surface), so one surface's reports can't
+ *     starve another's.
  *   - Returns 204 No Content for valid reports (browser expects no body).
  *   - Stores rollup data for administrator review and future export surfaces.
  *   - Flags a likely competing CSP header when a report's disposition doesn't
@@ -26,6 +28,7 @@ use WP_SAM\Intelligence\Ip_Resolver;
 use WP_SAM\Intelligence\Rate_Limiter;
 use WP_SAM\Modules\Audit_Log;
 use WP_SAM\Security\Pillar_Violation_Store;
+use WP_SAM\Security\Reporting_Endpoint;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -51,7 +54,15 @@ class Violation_Reporter {
 	 * tighter and checked earlier -- see check_not_flooding()'s own
 	 * docblock for where it's wired in.
 	 */
-	private const MAX_REPORTS_PER_IP_PER_WINDOW = 40;
+	private const MAX_REPORTS_PER_IP_PER_WINDOW = array(
+		'frontend' => 40,
+		// Only staff reach wp-admin, so its traffic can't be the visitor-
+		// driven storm this guard exists for, while one unlearned admin
+		// screen (the block editor, a page-builder settings page) can
+		// legitimately report many dozens of inline violations per load.
+		'admin'    => 120,
+		'login'    => 40,
+	);
 	private const FLOOD_CHECK_WINDOW            = 10; // seconds
 	private const LEARNABLE_DIRECTIVES          = array(
 		'script-src',
@@ -138,17 +149,35 @@ class Violation_Reporter {
 	 * REMOTE_ADDR-only resolution every other caller in this codebase
 	 * trusts) rather than a new ad-hoc mechanism.
 	 *
+	 * The budget is per (IP, surface), the surface taken from the
+	 * `surface` hint Reporting_Endpoint::url_for_surface() puts on the
+	 * admin and login report URLs. It used to be one budget per IP: staff
+	 * working in wp-admin from one office IP shared it with their own
+	 * frontend browsing, and an admin page still being learned sends
+	 * dozens of reports per load, so admin reports were the ones refused.
+	 * The hint is client-supplied and only selects a bucket, so a flooder
+	 * gains at most one extra bucket per hinted surface; the surface a
+	 * report is stored under still comes from its own document URI.
+	 *
+	 * Each refusal is recorded in Csp_Delivery_Log, so dropped reports are
+	 * visible per surface instead of silently missing.
+	 *
 	 * An empty resolved IP fails open (returns true): there's no identity
 	 * to flood-check against, and handle() itself still runs the existing
 	 * per-(surface, directive) storage cap regardless.
 	 */
-	public function check_not_flooding(): bool|WP_Error {
+	public function check_not_flooding( ?WP_REST_Request $request = null ): bool|WP_Error {
 		$ip = Ip_Resolver::resolve();
 		if ( '' === $ip ) {
 			return true;
 		}
 
-		if ( $this->rate_limiter->exceeded( $ip, 'csp_report', self::MAX_REPORTS_PER_IP_PER_WINDOW, self::FLOOD_CHECK_WINDOW ) ) {
+		$surface = Reporting_Endpoint::surface_hint( null !== $request ? $request->get_param( Reporting_Endpoint::SURFACE_PARAM ) : null );
+		$bucket  = 'frontend' === $surface ? 'csp_report' : 'csp_report_' . $surface;
+		$max     = self::MAX_REPORTS_PER_IP_PER_WINDOW[ $surface ];
+
+		if ( $this->rate_limiter->exceeded( $ip, $bucket, $max, self::FLOOD_CHECK_WINDOW ) ) {
+			Csp_Delivery_Log::record_throttled( $surface );
 			return new WP_Error(
 				'wp_sam_report_flood',
 				__( 'Too many reports from this address in a short window.', 'vcns-security-automation-manager' ),

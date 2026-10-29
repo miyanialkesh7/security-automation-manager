@@ -14,6 +14,7 @@ namespace WP_SAM;
 
 use WP_SAM\CSP\Automation_Config;
 use WP_SAM\CSP\Violation_Reporter;
+use WP_SAM\Modules\Audit_Log;
 use WP_SAM\Security\Cache_Control_Builder;
 use WP_SAM\Security\Cross_Origin_Embedder_Policy_Builder;
 use WP_SAM\Security\Cross_Origin_Opener_Policy_Builder;
@@ -40,6 +41,7 @@ class Activator {
 		self::migrate_loosen_media_src_default();
 		self::migrate_consolidate_bypass_flags_into_json();
 		self::migrate_default_reporting_transport_to_both();
+		self::migrate_hold_admin_csp_at_report_only();
 
 		// Generic, empty-by-default extension point: an extension (see
 		// includes/extensions/, physically absent from the WordPress.org-
@@ -181,6 +183,50 @@ class Activator {
 	 * bump calling activate() again. Guarded by its own one-time completion
 	 * marker instead.
 	 */
+	/**
+	 * Schema v47: Policy_Builder now sends the admin surface's policy (it
+	 * hooks admin_init; WordPress never fires send_headers on wp-admin
+	 * pages, so until now no admin policy was ever sent). A site whose
+	 * admin profile was already set to enforce has therefore been running
+	 * with no admin policy at all, and would start enforcing a never-tested
+	 * one on its dashboard the moment it updated. Hold any such profile at
+	 * report-only, once, so its real reports can be reviewed before an
+	 * administrator promotes it again. Flag-guarded, so a deliberate
+	 * re-promotion afterwards is never undone.
+	 */
+	private static function migrate_hold_admin_csp_at_report_only(): void {
+		if ( get_option( 'wp_sam_admin_csp_held_v47', false ) ) {
+			return;
+		}
+		update_option( 'wp_sam_admin_csp_held_v47', true );
+
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		$held = $wpdb->update(
+			$wpdb->prefix . 'csp_policy_profiles',
+			array(
+				'mode'       => 'report-only',
+				'updated_at' => current_time( 'mysql', true ),
+			),
+			array(
+				'surface' => 'admin',
+				'mode'    => 'enforce',
+			),
+			array( '%s', '%s' ),
+			array( '%s', '%s' )
+		);
+
+		if ( ! empty( $held ) ) {
+			( new Audit_Log() )->log(
+				'policy_change',
+				'admin_csp_held_report_only',
+				'The admin surface\'s Content Security Policy was switched from Enforce to Report-only. Earlier versions never actually sent the admin policy, so it has never been tested on your dashboard. Review its reports under Observe → CSP Violations, then promote it again from Control → CSP Profiles once they are clean.',
+				'warning'
+			);
+		}
+	}
+
 	private static function migrate_default_reporting_transport_to_both(): void {
 		if ( get_option( 'wp_sam_reporting_transport_defaulted_v39', false ) ) {
 			return;
@@ -388,6 +434,8 @@ class Activator {
 			'wp_sam_tor_list_last_fetch_status',
 			'wp_sam_geoip_provider',
 			'wp_sam_geoip_ipinfo_token',
+			'wp_sam_own_addresses',
+			'wp_sam_site_country',
 		);
 	}
 
@@ -725,14 +773,28 @@ class Activator {
 		// classification defaults to 'unclassified': a fresh discovery is
 		// neither trusted nor blocked until an administrator decides, matching
 		// this plugin's report-first philosophy everywhere else. expected_sri is
-		// admin-supplied only -- this plugin never fetches a remote resource to
-		// compute a hash itself.
+		// only ever set by an administrator's own action (typed, Suggest, or
+		// Re-approve) -- a remote fetch is only used to suggest or compare a
+		// hash, never to approve one by itself.
 		// v19: adds last_seen_url -- the most recently observed full URL (path
 		// and query included) for this origin. Needed because the "Suggest"
 		// hash helper (ajax_suggest_dependency_sri()) fetches a real file and
 		// computes its hash for review, which requires an exact file URL, not
 		// just an origin -- previously the administrator had to already know
 		// or go find that URL themselves before they could use Suggest at all.
+		// v48: adds the pinned-hash drift columns read and written by
+		// Security\Pinned_Dependency_Checker's daily job. pinned_url is the
+		// exact URL whose content the pinned expected_sri was taken from
+		// (set by Suggest to the URL it hashed, or on a manual pin to the
+		// row's last_seen_url at that moment). integrity_checked_at is the
+		// last successful re-fetch whose hash matched or was compared;
+		// drift_detected_at/drift_observed_sri record the first time the
+		// file stopped matching and the hash it serves now.
+		// integrity_attempted_at/integrity_check_error are the separate
+		// "couldn't check" state: a fetch failure is never recorded as
+		// drift. Nothing here is ever approved automatically -- only an
+		// administrator's "Re-approve new hash" click copies
+		// drift_observed_sri into expected_sri.
 		dbDelta(
 			"CREATE TABLE {$p}sam_dependency_inventory (
   id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -742,6 +804,12 @@ class Activator {
   classification varchar(32) NOT NULL DEFAULT 'unclassified',
   expected_sri varchar(128) DEFAULT NULL,
   last_seen_url varchar(2048) DEFAULT NULL,
+  pinned_url varchar(2048) DEFAULT NULL,
+  integrity_checked_at datetime DEFAULT NULL,
+  integrity_attempted_at datetime DEFAULT NULL,
+  integrity_check_error varchar(64) DEFAULT NULL,
+  drift_detected_at datetime DEFAULT NULL,
+  drift_observed_sri varchar(128) DEFAULT NULL,
   evidence_count bigint(20) UNSIGNED NOT NULL DEFAULT 1,
   first_seen_at datetime NOT NULL,
   last_seen_at datetime NOT NULL,

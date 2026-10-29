@@ -17,6 +17,7 @@ use WP_SAM\CSP\Hash_Manager;
 use WP_SAM\CSP\Learning_Window;
 use WP_SAM\CSP\Nonce_Manager;
 use WP_SAM\CSP\Policy_Builder;
+use WP_SAM\CSP\Rest_Csp_Header;
 use WP_SAM\CSP\Scheduler;
 use WP_SAM\CSP\Violation_Reporter;
 use WP_SAM\Intelligence\Account_Integrity_Recorder;
@@ -68,6 +69,7 @@ use WP_SAM\Security\Cross_Origin_Opener_Policy_Builder;
 use WP_SAM\Security\Cross_Origin_Resource_Policy_Builder;
 use WP_SAM\Security\Dependency_Governance_Builder;
 use WP_SAM\Security\Dependency_Integrity_Monitor;
+use WP_SAM\Security\Pinned_Dependency_Checker;
 use WP_SAM\Security\Information_Masking_Builder;
 use WP_SAM\Security\Internal_Script_Integrity_Builder;
 use WP_SAM\Security\Permissions_Policy_Builder;
@@ -255,6 +257,7 @@ final class Plugin {
 		// Register CSP and simple pillar header emission on all request types.
 		$this->nonce_manager->register();
 		$this->policy_builder->register();
+		( new Rest_Csp_Header() )->register();
 		$this->x_frame_options_builder->register();
 		$this->x_content_type_options_builder->register();
 		$this->information_masking_builder->register();
@@ -339,6 +342,10 @@ final class Plugin {
 		// WP Cron: daily exception expiry check + upcoming-expiry
 		// notification (GitHub issue #177).
 		( new Exception_Scheduler() )->register();
+
+		// WP Cron: daily re-hash of each pinned third-party file, flagging
+		// a vendor-side change as drift for the administrator to review.
+		( new Pinned_Dependency_Checker( $this->audit ) )->register();
 
 		// ACME certificate automation: http-01 responder runs on every request
 		// (the CA's validation fetch is an anonymous front-end GET); the

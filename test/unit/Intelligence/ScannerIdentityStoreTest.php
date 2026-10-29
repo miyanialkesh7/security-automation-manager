@@ -353,4 +353,17 @@ class ScannerIdentityStoreTest extends TestCase {
 		$this->assertTrue( $ok );
 		$this->assertSame( 'unknown', $GLOBALS['_wpdb_updated_rows'][0]['data']['verification_state'] );
 	}
+
+	public function test_recent_wp_cron_callers_skips_addresses_already_treated_as_this_site(): void {
+		\WP_SAM\Intelligence\Own_Address_Store::save( '185.177.72.38' );
+		$GLOBALS['_wpdb_get_col'] = array( '10.16.17.55', '185.199.223.7', '185.177.72.38', '203.0.113.9' );
+
+		$this->assertSame( array( '185.199.223.7', '203.0.113.9' ), $this->store->recent_wp_cron_callers() );
+	}
+
+	public function test_recent_wp_cron_callers_returns_at_most_the_limit(): void {
+		$GLOBALS['_wpdb_get_col'] = array( '203.0.113.1', '203.0.113.2', '203.0.113.3' );
+
+		$this->assertSame( array( '203.0.113.1', '203.0.113.2' ), $this->store->recent_wp_cron_callers( 30, 2 ) );
+	}
 }
