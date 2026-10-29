@@ -2233,10 +2233,10 @@ class Admin_UI {
 				$deployment = 'download';
 			}
 
-			$config['deployment']   = $deployment;
-			$config['export_path']  = sanitize_text_field( wp_unslash( $_POST['wp_sam_cert_export_path'] ?? '' ) );
-			$config['cpanel_host']  = sanitize_text_field( wp_unslash( $_POST['wp_sam_cert_cpanel_host'] ?? '' ) );
-			$config['cpanel_user']  = sanitize_text_field( wp_unslash( $_POST['wp_sam_cert_cpanel_user'] ?? '' ) );
+			$config['deployment']  = $deployment;
+			$config['export_path'] = sanitize_text_field( wp_unslash( $_POST['wp_sam_cert_export_path'] ?? '' ) );
+			$config['cpanel_host'] = sanitize_text_field( wp_unslash( $_POST['wp_sam_cert_cpanel_host'] ?? '' ) );
+			$config['cpanel_user'] = sanitize_text_field( wp_unslash( $_POST['wp_sam_cert_cpanel_user'] ?? '' ) );
 			// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- an API token is an opaque secret; sanitizing could alter it.
 			$config['cpanel_token'] = '' !== (string) wp_unslash( $_POST['wp_sam_cert_cpanel_token'] ?? '' )
 				? (string) wp_unslash( $_POST['wp_sam_cert_cpanel_token'] )
