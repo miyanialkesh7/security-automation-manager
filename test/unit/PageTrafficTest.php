@@ -521,4 +521,36 @@ class PageTrafficTest extends TestCase {
 		$this->assertStringContainsString( '<code>0.0.0.0/0</code> -- Too broad', $output );
 		$this->assertFalse( get_transient( 'wp_sam_own_addresses_rejected_' . get_current_user_id() ) );
 	}
+
+	/**
+	 * Help text spans the page's width on every tab, as it already did on
+	 * Network Intelligence. A max-width:700px on the Policy, IP Rules and
+	 * Blocks paragraphs left a wide empty band beside them.
+	 *
+	 * @dataProvider tab_provider
+	 */
+	public function test_help_text_is_not_width_capped( string $tab ): void {
+		$_GET['tab']                  = $tab;
+		$GLOBALS['_wpdb_get_results'] = array();
+
+		ob_start();
+		require WP_SAM_DIR . 'includes/admin/views/page-traffic.php';
+		$output = (string) ob_get_clean();
+
+		unset( $_GET['tab'] );
+
+		$this->assertStringContainsString( '<p class="description"', $output );
+		$this->assertDoesNotMatchRegularExpression( '/<p class="description"[^>]*max-width/', $output );
+	}
+
+	public static function tab_provider(): array {
+		return array(
+			'policy'               => array( 'policy' ),
+			'ip-rules'             => array( 'ip-rules' ),
+			'blocks'               => array( 'blocks' ),
+			'network-intelligence' => array( 'network-intelligence' ),
+			'detectors'            => array( 'detectors' ),
+			'custom-rules'         => array( 'custom-rules' ),
+		);
+	}
 }
