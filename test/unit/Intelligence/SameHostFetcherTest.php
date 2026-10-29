@@ -88,18 +88,20 @@ class SameHostFetcherTest extends TestCase {
 		$this->assertCount( 2, $this->calls );
 	}
 
-	public function test_a_redirect_to_another_host_is_not_followed(): void {
+	public function test_a_redirect_to_another_host_is_not_followed_or_recorded(): void {
 		$result = $this->fetcher(
 			array(
-				$this->response( 301, 'https://alltimetech.co.uk/robots.txt' ),
-				$this->response( 200, '', 'production copy' ),
+				$this->response( 301, 'https://other-copy.example.org/robots.txt' ),
+				$this->response( 200, '', 'other copy' ),
 			)
-		)->get( 'https://staging.alltimetech.co.uk/robots.txt' );
+		)->get( 'https://example.com/robots.txt' );
 
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'wp_sam_offsite_redirect', $result->get_error_code() );
-		$this->assertSame( "Redirected to another host (alltimetech.co.uk, HTTP 301), so this site's own copy could not be read.", $result->get_error_message() );
-		$this->assertSame( 'alltimetech.co.uk', $result->get_error_data()['host'] );
+		$this->assertSame( "Redirected away from this site (HTTP 301), so this site's own copy could not be read.", $result->get_error_message() );
+		// SAM knows only its own address: the error never says where the
+		// redirect pointed, which is often another copy of this site.
+		$this->assertSame( array( 'code' => 301 ), $result->get_error_data() );
 		$this->assertCount( 1, $this->calls, 'The off-site Location must never be requested.' );
 	}
 

@@ -36,6 +36,9 @@
  *     (Certificate_Store::SECRET_FIELDS) in the same option -- those three
  *     fields are stripped before export and never written by import,
  *     mirrored here rather than imported from that private constant.
+ *   - Never the exporting site's own URL. A file is usually imported into
+ *     another copy of the same site, and SAM must never be told about one
+ *     (see Same_Host_Fetcher); import never read it anyway.
  */
 
 declare( strict_types=1 );
@@ -125,7 +128,6 @@ class Config_Portability {
 			'exported_at'    => current_time( 'mysql', true ),
 			'plugin_version' => defined( 'WP_SAM_VERSION' ) ? WP_SAM_VERSION : '',
 			'schema_version' => defined( 'WP_SAM_DB_VERSION' ) ? (int) WP_SAM_DB_VERSION : 0,
-			'site_url'       => home_url(),
 			'options'        => $options,
 			'cert_config'    => $this->export_cert_config(),
 			'tables'         => $tables,
