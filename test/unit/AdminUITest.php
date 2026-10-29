@@ -840,6 +840,41 @@ class AdminUITest extends TestCase {
 		$this->assertStringContainsString( 'captured for surface', $output );
 	}
 
+	/**
+	 * @dataProvider redirected_self_request_events
+	 */
+	public function test_a_redirected_self_request_notice_explains_the_fix_without_naming_where_it_went( string $component, string $event ): void {
+		$GLOBALS['_wp_current_user_can']['manage_options'] = true;
+		update_option(
+			'wp_sam_admin_notices',
+			array(
+				array(
+					'component' => $component,
+					'event'     => $event,
+					'detail'    => 'https://example.com/ redirected away from this site (HTTP 302), so this page was not crawled.',
+					'severity'  => 'warning',
+				),
+			)
+		);
+
+		ob_start();
+		$this->make_admin_ui()->display_admin_notices();
+		$output = (string) ob_get_clean();
+
+		$this->assertStringContainsString( 'sent away from this site before WordPress saw it', $output );
+		$this->assertStringContainsString( 'user agent WP-CSP-Discovery', $output );
+		$this->assertStringContainsString( 'rather than a whole private range', $output );
+		$this->assertStringContainsString( '<details>', $output, 'The technical detail stays available, collapsed.' );
+	}
+
+	/** @return array<string, array{0: string, 1: string}> */
+	public static function redirected_self_request_events(): array {
+		return array(
+			'discovery crawl'      => array( 'discovery', 'crawl_redirected_offsite' ),
+			'pinned script check'  => array( 'dependency_integrity_monitor', 'scan_redirected_offsite' ),
+		);
+	}
+
 	public function test_display_admin_notices_falls_back_to_raw_detail_for_unlisted_events(): void {
 		// Only events actually found to need simplification are listed in
 		// ADMIN_NOTICE_SUMMARIES -- anything else keeps today's behaviour

@@ -71,7 +71,10 @@ class DiscoveryTest extends TestCase {
 			->with(
 				'discovery',
 				'crawl_redirected_offsite',
-				$this->logicalAnd( $this->stringContains( 'https://example.com/' ), $this->stringContains( 'production.example.org' ) ),
+				$this->logicalAnd(
+					$this->stringContains( 'https://example.com/ redirected away from this site (HTTP 301)' ),
+					$this->logicalNot( $this->stringContains( 'production.example.org' ) )
+				),
 				'warning'
 			);
 

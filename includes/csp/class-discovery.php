@@ -82,9 +82,10 @@ class Discovery {
 	/**
 	 * Discovers sources from a single URL and stores them.
 	 *
-	 * Uses Same_Host_Fetcher so a redirect to another host (e.g. a staging
-	 * site sending unrecognised IPs to production) is reported rather than
-	 * silently crawled as if it were this site. A 401/403 is logged at info
+	 * Uses Same_Host_Fetcher so a redirect away from this site (e.g. an IP
+	 * allow-list sending unrecognised addresses elsewhere) is reported --
+	 * without saying where it pointed -- rather than silently crawled as if
+	 * it were this site. A 401/403 is logged at info
 	 * only: it is almost always a firewall or login protection refusing an
 	 * anonymous request, not something wrong with this plugin or the site.
 	 */
@@ -100,9 +101,8 @@ class Discovery {
 
 		if ( is_wp_error( $response ) && 'wp_sam_offsite_redirect' === $response->get_error_code() ) {
 			$data = (array) $response->get_error_data();
-			$host = (string) ( $data['host'] ?? '' );
 			$code = (int) ( $data['code'] ?? 0 );
-			$this->audit->log( 'discovery', 'crawl_redirected_offsite', "{$url} redirected to another host ({$host}, HTTP {$code}), so this page was not crawled.", 'warning' );
+			$this->audit->log( 'discovery', 'crawl_redirected_offsite', "{$url} redirected away from this site (HTTP {$code}), so this page was not crawled.", 'warning' );
 			return array(
 				'added'   => 0,
 				'updated' => 0,
