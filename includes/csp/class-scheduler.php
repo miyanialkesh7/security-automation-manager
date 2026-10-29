@@ -88,6 +88,7 @@ class Scheduler {
 			$this->purge_old_pillar_violations();
 			$this->purge_old_request_events();
 			$this->purge_stale_traffic_blocks();
+			$hash_mgr->retire_json_data_hashes();
 			$hash_mgr->prune_stale_by_age();
 			$this->run_drift_scan( $plugin );
 			$this->run_campaign_scan();
@@ -140,6 +141,11 @@ class Scheduler {
 			);
 
 			$this->audit->finish_scan( $scan_id, $results );
+			// Same retirement the daily cron runs -- otherwise a site whose cron
+			// rarely fires keeps every stale hash active and in the header's
+			// byte budget until it does.
+			$hash_mgr->retire_json_data_hashes();
+			$hash_mgr->prune_stale_by_age();
 			return $results;
 
 		} catch ( \Throwable $e ) {
@@ -376,14 +382,7 @@ class Scheduler {
 	 * failed fetch leaves existing cached rules untouched.
 	 */
 	private function refresh_robots_rules(): void {
-		$result = ( new Robots_Rules_Store() )->refresh();
-
-		$this->audit->log(
-			'scheduler',
-			'refreshed' === $result['status'] ? 'robots_rules_refreshed' : 'robots_rules_refresh_failed',
-			(string) $result['message'],
-			'refreshed' === $result['status'] ? 'info' : 'warning'
-		);
+		$this->log_well_known_refresh( 'robots_rules', ( new Robots_Rules_Store() )->refresh() );
 	}
 
 	/**
@@ -395,57 +394,43 @@ class Scheduler {
 	 * failure never clears already-cached data.
 	 */
 	private function refresh_agents_rules(): void {
-		$result = ( new Agents_Rules_Store() )->refresh();
-
-		$this->audit->log(
-			'scheduler',
-			'refreshed' === $result['status'] ? 'agents_rules_refreshed' : 'agents_rules_refresh_failed',
-			(string) $result['message'],
-			'refreshed' === $result['status'] ? 'info' : 'warning'
-		);
+		$this->log_well_known_refresh( 'agents_rules', ( new Agents_Rules_Store() )->refresh() );
 	}
 
 	private function refresh_security_txt(): void {
-		$result = ( new Security_Txt_Store() )->refresh();
-
-		$this->audit->log(
-			'scheduler',
-			'refreshed' === $result['status'] ? 'security_txt_refreshed' : 'security_txt_refresh_failed',
-			(string) $result['message'],
-			'refreshed' === $result['status'] ? 'info' : 'warning'
-		);
+		$this->log_well_known_refresh( 'security_txt', ( new Security_Txt_Store() )->refresh() );
 	}
 
 	private function refresh_humans_txt(): void {
-		$result = ( new Humans_Txt_Store() )->refresh();
-
-		$this->audit->log(
-			'scheduler',
-			'refreshed' === $result['status'] ? 'humans_txt_refreshed' : 'humans_txt_refresh_failed',
-			(string) $result['message'],
-			'refreshed' === $result['status'] ? 'info' : 'warning'
-		);
+		$this->log_well_known_refresh( 'humans_txt', ( new Humans_Txt_Store() )->refresh() );
 	}
 
 	private function refresh_ads_txt(): void {
-		$result = ( new Ads_Txt_Store() )->refresh();
-
-		$this->audit->log(
-			'scheduler',
-			'refreshed' === $result['status'] ? 'ads_txt_refreshed' : 'ads_txt_refresh_failed',
-			(string) $result['message'],
-			'refreshed' === $result['status'] ? 'info' : 'warning'
-		);
+		$this->log_well_known_refresh( 'ads_txt', ( new Ads_Txt_Store() )->refresh() );
 	}
 
 	private function refresh_app_ads_txt(): void {
-		$result = ( new App_Ads_Txt_Store() )->refresh();
+		$this->log_well_known_refresh( 'app_ads_txt', ( new App_Ads_Txt_Store() )->refresh() );
+	}
 
+	/**
+	 * A site simply not having one of these files (`absent`, HTTP 404/410)
+	 * is an answer, not a problem, so it logs at info like a refresh does --
+	 * only a genuine `failed` fetch logs at warning and so reaches the
+	 * wp-admin notice queue.
+	 *
+	 * @param array{status:string, count:int, message:string} $result A well-known-file store's refresh() result.
+	 */
+	private function log_well_known_refresh( string $prefix, array $result ): void {
 		$this->audit->log(
 			'scheduler',
-			'refreshed' === $result['status'] ? 'app_ads_txt_refreshed' : 'app_ads_txt_refresh_failed',
+			$prefix . match ( $result['status'] ) {
+				'refreshed' => '_refreshed',
+				'absent'    => '_absent',
+				default     => '_refresh_failed',
+			},
 			(string) $result['message'],
-			'refreshed' === $result['status'] ? 'info' : 'warning'
+			in_array( $result['status'], array( 'refreshed', 'absent' ), true ) ? 'info' : 'warning'
 		);
 	}
 
