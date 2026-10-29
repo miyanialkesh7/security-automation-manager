@@ -392,7 +392,8 @@ final class Github_Update_Checker {
 	}
 
 	/**
-	 * Checks that the manifest names this plugin, has a valid version, and points at an allowed package URL.
+	 * Checks that the manifest names this plugin, has a valid version, points at an
+	 * allowed package URL, and carries a valid 64-character SHA-256 digest.
 	 *
 	 * @param object $data Decoded manifest.
 	 * @return bool True when the manifest is acceptable.

@@ -142,7 +142,7 @@ class Admin_Controller {
 	 * Lists each surface with its mode and latest policy version.
 	 *
 	 * @param \WP_REST_Request|null $_request Unused.
-	 * @return \WP_REST_Response Policies keyed by surface.
+	 * @return \WP_REST_Response A policies list with one row per surface.
 	 */
 	public function list_policies( ?\WP_REST_Request $_request = null ): \WP_REST_Response {
 		global $wpdb;
@@ -210,10 +210,10 @@ class Admin_Controller {
 	}
 
 	/**
-	 * Returns a policy version together with the version before it.
+	 * Returns a policy version together with its diff from the version before it.
 	 *
 	 * @param \WP_REST_Request $request Request with the version id.
-	 * @return \WP_REST_Response The current and previous versions, or a 404 error.
+	 * @return \WP_REST_Response The version and the diff, or a 404 error.
 	 */
 	public function get_policy_diff( \WP_REST_Request $request ): \WP_REST_Response {
 		$current = $this->policy_versions->get_version( (int) $request['id'] );

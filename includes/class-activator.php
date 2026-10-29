@@ -315,7 +315,10 @@ class Activator {
 	}
 
 	/**
-	 * Returns the core table suffixes, without any registered by an extension.
+	 * Returns the core table suffixes only.
+	 *
+	 * Suffixes an extension registers through the wp_sam_table_suffixes filter
+	 * are not included; use get_all_table_suffixes() for those.
 	 *
 	 * @return string[] Table names without the WordPress prefix.
 	 */
@@ -372,7 +375,10 @@ class Activator {
 	}
 
 	/**
-	 * Returns every option name the plugin owns, used by Reset Data, Export Config and uninstall.
+	 * Returns the core option names only.
+	 *
+	 * Options an extension registers through the wp_sam_option_names filter
+	 * are not included; use get_all_option_names() for the full list.
 	 *
 	 * @return string[] Option names.
 	 */
@@ -1613,8 +1619,9 @@ class Activator {
 	/**
 	 * Rolls violation reports up to one row per fingerprint.
 	 *
-	 * Backfills last_reported_at, merges historic duplicate fingerprints into a
-	 * single row with summed counts, then makes the fingerprint index unique.
+	 * Backfills first_reported_at and last_reported_at from reported_at, merges
+	 * historic duplicate fingerprints into a single row with summed counts, then
+	 * makes the fingerprint index unique.
 	 * Does nothing when the table does not exist.
 	 *
 	 * @return void
@@ -2327,7 +2334,7 @@ class Activator {
 	 * Returns the default CSP directives for a surface.
 	 *
 	 * @param string $surface Surface slug: frontend, admin, login or api.
-	 * @return array<string,string[]> Source list for each directive.
+	 * @return array<string,string[]|null> Source list for each directive; sandbox is null when disabled.
 	 */
 	private static function default_directives( string $surface ): array {
 		// 'report-sample' added to script/style-src so browsers include the offending

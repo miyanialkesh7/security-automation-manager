@@ -175,7 +175,11 @@ final class Plugin {
 	// ── DB migration gate ─────────────────────────────────────────────────────
 
 	/**
-	 * Runs the activator when the stored schema version is older than the code, or when tables are missing.
+	 * Runs the activator when the schema needs bringing up to date.
+	 *
+	 * That is when the stored schema version is older than the code, when
+	 * wp_sam_schema_verified_version does not match the current version, or,
+	 * on admin requests only, when any plugin table is missing.
 	 *
 	 * A downgrade is detected first and never runs the activator (see Rollback_Guard).
 	 *
