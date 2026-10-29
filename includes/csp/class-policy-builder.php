@@ -246,27 +246,27 @@ class Policy_Builder extends Header_Builder {
 	 */
 	public static function bypass_text( string $flag ): array {
 		$text = array(
-			'img_src_data' => array(
+			'img_src_data'                  => array(
 				'label'     => __( 'Allow data: URIs for images', 'vcns-security-automation-manager' ),
 				'risk_note' => __( 'Low risk: inline image data cannot execute as script.', 'vcns-security-automation-manager' ),
 			),
-			'img_src_blob' => array(
+			'img_src_blob'                  => array(
 				'label'     => __( 'Allow blob: URIs for images', 'vcns-security-automation-manager' ),
 				'risk_note' => __( 'Low risk: like data:, a blob: image source cannot execute as script -- common with canvas exports and client-side file/image previews.', 'vcns-security-automation-manager' ),
 			),
-			'font_src_data' => array(
+			'font_src_data'                 => array(
 				'label'     => __( 'Allow data: URIs for fonts', 'vcns-security-automation-manager' ),
 				'risk_note' => __( 'Low risk: inline font data cannot execute as script.', 'vcns-security-automation-manager' ),
 			),
-			'media_src_data' => array(
+			'media_src_data'                => array(
 				'label'     => __( 'Allow data: URIs for audio/video', 'vcns-security-automation-manager' ),
 				'risk_note' => __( 'Low risk: inline audio/video data cannot execute as script.', 'vcns-security-automation-manager' ),
 			),
-			'media_src_blob' => array(
+			'media_src_blob'                => array(
 				'label'     => __( 'Allow blob: URIs for audio/video', 'vcns-security-automation-manager' ),
 				'risk_note' => __( 'Low risk: a blob: media source cannot execute as script -- common with streaming/adaptive-bitrate players built on the Media Source Extensions API.', 'vcns-security-automation-manager' ),
 			),
-			'style_src_attr_unsafe_hashes' => array(
+			'style_src_attr_unsafe_hashes'  => array(
 				'label'     => __( 'Allow inline style attributes via hash approval (adds \'unsafe-hashes\')', 'vcns-security-automation-manager' ),
 				'risk_note' => __( 'Medium risk: only takes effect together with an approved content hash (CSP3 §6.1.2); does not affect script-src-attr or script execution of any kind. See docs/threat-model.md.', 'vcns-security-automation-manager' ),
 			),
@@ -274,11 +274,11 @@ class Policy_Builder extends Header_Builder {
 				'label'     => __( 'Allow inline event handler attributes via hash approval (adds \'unsafe-hashes\')', 'vcns-security-automation-manager' ),
 				'risk_note' => __( 'Medium risk: only takes effect together with an approved content hash (CSP3 §6.1.2), and only for that exact hashed value -- does not enable \'unsafe-inline\' or affect script-src/script-src-elem. Covers inline event handler attributes such as onclick=""; script-src-attr is otherwise \'none\' everywhere in this codebase.', 'vcns-security-automation-manager' ),
 			),
-			'script_src_wasm_unsafe_eval' => array(
+			'script_src_wasm_unsafe_eval'   => array(
 				'label'     => __( 'Allow WebAssembly compilation (adds \'wasm-unsafe-eval\')', 'vcns-security-automation-manager' ),
 				'risk_note' => __( 'Medium risk: CSP3\'s \'wasm-unsafe-eval\' keyword permits only WebAssembly instantiation/compilation -- unlike \'unsafe-eval\', it does not permit eval(), new Function(), or any other string-to-JS execution path. Needed by some image/video-processing, PDF-rendering, or cryptography libraries compiled to WebAssembly.', 'vcns-security-automation-manager' ),
 			),
-			'worker_src_blob' => array(
+			'worker_src_blob'               => array(
 				'label'     => __( 'Allow blob: URIs for workers', 'vcns-security-automation-manager' ),
 				'risk_note' => __( 'Higher risk than the other entries here: unlike an image, font, or media source, a Worker constructed from a blob: URL does execute as JavaScript. Only enable this if a specific, identified library on this site genuinely constructs its worker from a blob (common with PDF.js and some video encoders, or bundler-generated workers) -- if nothing on the site does this, leave it off.', 'vcns-security-automation-manager' ),
 			),
